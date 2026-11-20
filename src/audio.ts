@@ -91,50 +91,6 @@ export class Sfx {
     o.stop(t + dur + 0.02);
   }
 
-  /** A tone that wobbles (vibrato) while gliding from f0 to f1. */
-  private wobble(f0: number, f1: number, dur: number, vol: number, rate: number, depth: number, delay = 0): void {
-    const { ctx, master } = this;
-    if (!ctx || !master || this._muted) return;
-    const t = ctx.currentTime + delay;
-    const o = ctx.createOscillator();
-    const lfo = ctx.createOscillator();
-    const lfoGain = ctx.createGain();
-    const g = ctx.createGain();
-    o.type = 'sine';
-    o.frequency.setValueAtTime(f0, t);
-    o.frequency.exponentialRampToValueAtTime(f1, t + dur);
-    lfo.frequency.value = rate;
-    lfoGain.gain.value = depth;
-    lfo.connect(lfoGain).connect(o.frequency);
-    g.gain.setValueAtTime(0.0001, t);
-    g.gain.exponentialRampToValueAtTime(vol, t + 0.015);
-    g.gain.exponentialRampToValueAtTime(0.0001, t + dur);
-    o.connect(g).connect(master);
-    o.start(t);
-    lfo.start(t);
-    o.stop(t + dur + 0.02);
-    lfo.stop(t + dur + 0.02);
-  }
-
-  /** A tone that jumps between pitches (a jagged, crackling arpeggio). */
-  private steps(type: OscillatorType, freqs: number[], stepDur: number, vol: number, delay = 0): void {
-    const { ctx, master } = this;
-    if (!ctx || !master || this._muted) return;
-    const t = ctx.currentTime + delay;
-    const dur = freqs.length * stepDur;
-    const o = ctx.createOscillator();
-    const g = ctx.createGain();
-    o.type = type;
-    freqs.forEach((f, i) => o.frequency.setValueAtTime(f, t + i * stepDur));
-    g.gain.setValueAtTime(0.0001, t);
-    g.gain.exponentialRampToValueAtTime(vol, t + 0.005);
-    g.gain.setValueAtTime(vol, t + dur * 0.6);
-    g.gain.exponentialRampToValueAtTime(0.0001, t + dur);
-    o.connect(g).connect(master);
-    o.start(t);
-    o.stop(t + dur + 0.02);
-  }
-
   private noise(dur: number, vol: number, freq: number, delay = 0, q = 1, type: BiquadFilterType = 'lowpass'): void {
     const { ctx, master, noiseBuf } = this;
     if (!ctx || !master || !noiseBuf || this._muted) return;
@@ -161,54 +117,135 @@ export class Sfx {
   }
 
   /**
+   * Closed-shape destruction: a plucked note on the A minor pentatonic, in tune with the music,
+   * with a sub-octave body and a soft thud. `a` is the angularity rank (0 circle, 1 infinity,
+   * 2 square, 3 triangle): the more angular, the higher the note and the more resonant the filter.
+   * The infinity sign plucks twice, once per loop.
+   */
+  private closedPluck(a: number, d: number): void {
+    const f = [220, 262, 330, 440][a]; // A3, C4, E4, A4 (no random detune: stays in tune)
+    const hits = a === 1 ? [0, 0.08] : [0];
+    hits.forEach((h, k) => {
+      const t = d + h;
+      const v = k === 0 ? 1 : 0.75;
+      this.pluck(f, 0.55, 0.2 * v, [1400, 1800, 2400, 3200][a], [2, 4, 7, 10][a], t);
+      this.tone('sine', f / 2, f / 2, 0.35, 0.18 * v, t);
+      this.noise(0.15, 0.16 * v, 700, t);
+    });
+  }
+
+  /**
+   * Open-shape destruction: glassy bell notes between C5 and C6 (above every closed shape),
+   * in tune with the music. The number of notes follows the shape: a wave is one wavering note,
+   * a line one clean note, a V two notes (one per stroke), a zigzag four fast notes (one per segment).
+   * `b` is the angularity rank: 0 wave, 1 line, 2 V, 3 zigzag.
+   */
+  private openBell(b: number, d: number): void {
+    const C5 = 523, D5 = 587, E5 = 659, G5 = 784, A5 = 880, C6 = 1047;
+    const phrases: [number, number][][] = [
+      [[C5, 0]],
+      [[D5, 0]],
+      [[E5, 0], [A5, 0.07]],
+      [[G5, 0], [C6, 0.045], [G5, 0.09], [C6, 0.135]],
+    ];
+    phrases[b].forEach(([f, at], k) => this.bellNote(f, d + at, k === 0 ? 1 : 0.75, b === 0));
+  }
+
+  /** Triangle plus a quiet, slightly detuned octave sine: glassy and chime-like. */
+  private bellNote(f: number, delay: number, v: number, vibrato: boolean): void {
+    const { ctx, master } = this;
+    if (!ctx || !master || this._muted) return;
+    const t = ctx.currentTime + delay;
+    const dur = 0.5;
+    const g = ctx.createGain();
+    g.gain.setValueAtTime(0.0001, t);
+    g.gain.exponentialRampToValueAtTime(0.3 * v, t + 0.003);
+    g.gain.exponentialRampToValueAtTime(0.0001, t + dur);
+    g.connect(master);
+
+    const oscs: OscillatorNode[] = [];
+    for (const [type, mult, level] of [['triangle', 1, 1], ['sine', 2.003, 0.25]] as const) {
+      const o = ctx.createOscillator();
+      const lg = ctx.createGain();
+      o.type = type;
+      o.frequency.value = f * mult;
+      lg.gain.value = level;
+      o.connect(lg).connect(g);
+      oscs.push(o);
+    }
+
+    if (vibrato) {
+      const lfo = ctx.createOscillator();
+      const depth = ctx.createGain();
+      lfo.frequency.value = 9;
+      depth.gain.value = f * 0.03;
+      lfo.connect(depth);
+      oscs.forEach((o) => depth.connect(o.frequency));
+      lfo.start(t);
+      lfo.stop(t + dur + 0.02);
+    }
+    for (const o of oscs) {
+      o.start(t);
+      o.stop(t + dur + 0.02);
+    }
+  }
+
+  /** Plucked synth note: sawtooth through a resonant low-pass that snaps shut. */
+  private pluck(f: number, dur: number, vol: number, cutoff: number, q: number, delay = 0): void {
+    const { ctx, master } = this;
+    if (!ctx || !master || this._muted) return;
+    const t = ctx.currentTime + delay;
+    const o = ctx.createOscillator();
+    const lp = ctx.createBiquadFilter();
+    const g = ctx.createGain();
+    o.type = 'sawtooth';
+    o.frequency.value = f;
+    lp.type = 'lowpass';
+    lp.Q.value = q;
+    lp.frequency.setValueAtTime(cutoff, t);
+    lp.frequency.exponentialRampToValueAtTime(Math.max(80, f * 0.8), t + dur * 0.6);
+    g.gain.setValueAtTime(0.0001, t);
+    g.gain.exponentialRampToValueAtTime(vol, t + 0.004);
+    g.gain.exponentialRampToValueAtTime(0.0001, t + dur);
+    o.connect(lp).connect(g).connect(master);
+    o.start(t);
+    o.stop(t + dur + 0.02);
+  }
+
+  /**
    * Destruction sound, one per shape.
-   * Closed shapes sound like a resonating hull breaking: tonal, low-mid (150–450 Hz), with a thud.
-   * Open shapes sound like an energy discharge: short, zappy, high (700–2300 Hz), with crackle.
-   * Within each family, the more angular the shape, the higher and harsher the sound.
+   * Closed shapes are plucked notes, low-mid (220–440 Hz); open shapes are bell notes, higher
+   * (523–1047 Hz). Both are in tune with the music. Within each family, the more angular the
+   * shape, the higher the sound.
    */
   explode(shape: ShapeId, i = 0): void {
     const d = Math.min(i * 0.04, 0.4); // stagger multi-kills
-    const j = 0.96 + Math.random() * 0.08; // slight pitch variation so repeats don't sound identical
     switch (shape) {
-      // ---- Closed: round to angular, low to higher.
-      case 'circle': // soft, round "bloom"
-        this.tone('sine', 196 * j, 150 * j, 0.55, 0.3, d);
-        this.tone('sine', 392 * j, 300 * j, 0.3, 0.07, d);
-        this.noise(0.3, 0.22, 700, d);
+      // ---- Closed: round to angular, low to higher note.
+      case 'circle':
+        this.closedPluck(0, d);
         break;
-      case 'infinity': // two rounded pulses, one per loop
-        this.tone('sine', 247 * j, 200 * j, 0.35, 0.26, d);
-        this.tone('sine', 294 * j, 240 * j, 0.35, 0.22, d + 0.07);
-        this.noise(0.3, 0.22, 900, d);
+      case 'infinity':
+        this.closedPluck(1, d);
         break;
-      case 'square': // firmer, hollow knock
-        this.tone('triangle', 330 * j, 280 * j, 0.4, 0.22, d);
-        this.tone('triangle', 660 * j, 560 * j, 0.2, 0.06, d);
-        this.noise(0.3, 0.28, 1600, d);
+      case 'square':
+        this.closedPluck(2, d);
         break;
-      case 'triangle': // sharp, bright crack with a ring
-        this.tone('square', 440 * j, 380 * j, 0.3, 0.1, d);
-        this.tone('triangle', 880 * j, 820 * j, 0.25, 0.08, d);
-        this.tone('sine', 1760 * j, 1700 * j, 0.04, 0.08, d);
-        this.noise(0.28, 0.3, 2600, d, 3);
+      case 'triangle':
+        this.closedPluck(3, d);
         break;
-      // ---- Open: curvy to jagged, high to very high.
-      case 'wave': // wobbly, liquid zap
-        this.wobble(880 * j, 640 * j, 0.3, 0.2, 18, 70, d);
-        this.noise(0.15, 0.1, 1800, d, 2, 'bandpass');
+      // ---- Open: curvy to jagged, higher notes and more of them.
+      case 'wave':
+        this.openBell(0, d);
         break;
-      case 'line': // clean laser slice, sweeping down
-        this.tone('sawtooth', 1250 * j, 320 * j, 0.18, 0.2, d);
-        this.noise(0.1, 0.14, 3000, d, 1, 'highpass');
+      case 'line':
+        this.openBell(1, d);
         break;
-      case 'v': // two quick strokes, the second higher
-        this.tone('sawtooth', 1250 * j, 700 * j, 0.09, 0.17, d);
-        this.tone('sawtooth', 1600 * j, 900 * j, 0.1, 0.17, d + 0.06);
-        this.noise(0.12, 0.13, 4000, d, 1, 'highpass');
+      case 'v':
+        this.openBell(2, d);
         break;
-      case 'zigzag': // jagged electric crackle, the highest of all
-        this.steps('square', [2000, 2600, 1850, 2800, 2200].map((f) => f * j), 0.032, 0.09, d);
-        this.noise(0.14, 0.2, 6000, d, 1, 'highpass');
+      case 'zigzag':
+        this.openBell(3, d);
         break;
     }
   }

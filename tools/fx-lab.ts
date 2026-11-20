@@ -31,6 +31,20 @@ for (const shape of SHAPE_ORDER) {
   shapesEl.appendChild(b);
 }
 
+/** Circle → infinity → square → triangle, slow enough to hear each one ring out. */
+function playClosed(): void {
+  sfx.unlock();
+  (['circle', 'infinity', 'square', 'triangle'] as const).forEach((shape, i) => setTimeout(() => game.triggerShape(shape), i * 650));
+}
+document.getElementById('blast-closed')!.addEventListener('click', playClosed);
+
+/** Wave → line → V → zigzag. */
+function playOpen(): void {
+  sfx.unlock();
+  (['wave', 'line', 'v', 'zigzag'] as const).forEach((shape, i) => setTimeout(() => game.triggerShape(shape), i * 550));
+}
+document.getElementById('blast-open')!.addEventListener('click', playOpen);
+
 // Start once the panel is fully built, so its final height is known.
 game.startSandbox(copies, panelInset());
 
