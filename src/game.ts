@@ -11,6 +11,7 @@ import {
   pickWeighted,
   type WaveDef,
 } from './levels';
+import { expertCorners, expertPath, type RouteCorner } from './paths';
 import { MIN_STROKE_SIZE, recognize } from './recognizer';
 import { SHAPE_ORDER, SHAPES, traceGlyph, type Pt, type ShapeId } from './shapes';
 
@@ -44,6 +45,24 @@ interface Asteroid {
   points: number;
   /** Already hit by a blast in flight. */
   targeted: boolean;
+  /** Expert mode: the shape-specific route it follows (see paths.ts). */
+  path?: AsteroidPath;
+}
+
+interface AsteroidPath {
+  /** Arrival direction and start distance from the ship. */
+  theta0: number;
+  rho0: number;
+  /** Distance from the ship's center at which it hits. */
+  hit: number;
+  /** Progress 0 → 1, and the time the whole approach takes. */
+  p: number;
+  dur: number;
+  side: number;
+  /** Angular shapes: corners of their straight legs (null for curvy routes). */
+  corners: RouteCorner[] | null;
+  /** Once on screen, it is kept inside the screen. */
+  entered: boolean;
 }
 
 interface Blast {
@@ -115,12 +134,14 @@ export interface HudState {
   level: number;
   shapes: ShapeId[];
   endless: boolean;
+  expert: boolean;
 }
 
 export interface LevelResult {
   /** Level index, or -1 in endless mode. */
   level: number;
   endless: boolean;
+  expert: boolean;
   score: number;
   hits: number;
   kills: number;
@@ -179,6 +200,8 @@ export class Game {
   private levelIndex = 0;
   /** Endless mode: waves never stop; the run ends when the shield is gone. */
   private endless = false;
+  /** Expert mode: asteroids follow shape-specific routes instead of flying straight in. */
+  private expert = false;
   private waveIndex = 0;
   private wave: WaveDef | null = null;
   private toSpawn = 0;
@@ -221,14 +244,16 @@ export class Game {
 
   // ---------------------------------------------------------------- lifecycle
 
-  startLevel(index: number): void {
+  startLevel(index: number, expert = false): void {
+    this.expert = expert;
     this.endless = false;
     this.levelIndex = index;
     this.startRun();
   }
 
   /** Endless mode: as many waves as the player can survive. */
-  startEndless(): void {
+  startEndless(expert = false): void {
+    this.expert = expert;
     this.endless = true;
     this.levelIndex = -1;
     this.startRun();
@@ -299,6 +324,15 @@ export class Game {
   }
 
   /** Blasts a shape exactly as if the player had drawn it. */
+  /** FX lab: sends every shape at the ship along its Expert route (harmless), to check the routes. */
+  sandboxParade(travelTime = 7): void {
+    if (this.state !== 'sandbox') return;
+    const was = this.expert;
+    this.expert = true;
+    SHAPE_ORDER.forEach((shape, i) => this.spawn(shape, (i / SHAPE_ORDER.length) * Math.PI * 2 + Math.PI / 8, travelTime));
+    this.expert = was;
+  }
+
   triggerShape(shape: ShapeId): void {
     if (this.state !== 'sandbox') return;
     const at = { x: this.cx, y: this.cy - this.shipR * 3 };
@@ -381,6 +415,7 @@ export class Game {
     return {
       level: this.levelIndex,
       endless: this.endless,
+      expert: this.expert,
       score: this.score,
       hits: this.hits,
       kills: this.kills,
@@ -567,6 +602,11 @@ export class Game {
 
   private shipHit(a: Asteroid): void {
     a.dead = true;
+    if (this.state === 'sandbox') {
+      // FX lab: arriving shapes just pop, no damage.
+      this.burst(a.x, a.y, SHAPES[a.shape].color, 16, a.r * 3);
+      return;
+    }
     this.sfx.hit();
     this.hits++;
     this.shield = Math.max(0, this.shield - HIT_DAMAGE);
@@ -621,6 +661,56 @@ export class Game {
       targeted: false,
       points: 0,
     });
+    // Expert mode: follow the shape's route, taking the same time to reach the ship as a straight run.
+    if (this.expert && this.state !== 'menu') {
+      const hit = this.shipR + r * 0.6;
+      const side = Math.random() < 0.5 ? 1 : -1;
+      this.asteroids[this.asteroids.length - 1].path = {
+        theta0: angle,
+        rho0: dist,
+        hit,
+        p: 0,
+        dur: (dist - hit) / speed,
+        side,
+        corners: expertCorners(shape, side),
+        entered: false,
+      };
+    }
+  }
+
+  /** Screen position on an Expert route at progress `p`. `keepOnScreen` stops it slipping out of reach. */
+  private routePoint(a: Asteroid, path: AsteroidPath, p: number, keepOnScreen: boolean): Pt {
+    const polar = (q: number, dTheta: number, rhoScale = 1): Pt => {
+      const theta = path.theta0 + dTheta;
+      let rho = (path.rho0 + (path.hit - path.rho0) * q) * rhoScale;
+      if (keepOnScreen) rho = Math.min(rho, edgeDistance(theta, this.w, this.h) - a.r * 0.5);
+      rho = Math.max(path.hit * (q >= 1 ? 1 : 0.5), rho);
+      return { x: this.cx + Math.cos(theta) * rho, y: this.cy + Math.sin(theta) * rho };
+    };
+    // Angular shapes: straight legs between corners.
+    const corners = path.corners;
+    if (corners) {
+      let i = 1;
+      while (i < corners.length - 1 && corners[i].p < p) i++;
+      const c0 = corners[i - 1];
+      const c1 = corners[i];
+      const t = c1.p > c0.p ? (p - c0.p) / (c1.p - c0.p) : 1;
+      const A = polar(c0.q, c0.dTheta);
+      const B = polar(c1.q, c1.dTheta);
+      return { x: A.x + (B.x - A.x) * t, y: A.y + (B.y - A.y) * t };
+    }
+    const pt = expertPath(a.shape, p, path.side);
+    return polar(pt.q, pt.dTheta, pt.rhoScale);
+  }
+
+  /** Moves an expert-mode asteroid along its route. */
+  private followPath(a: Asteroid, path: AsteroidPath, dt: number): void {
+    path.p = Math.min(1, path.p + dt / path.dur);
+    // Never leave the screen once it has come in (a spiral would otherwise slip out of reach).
+    const pos = this.routePoint(a, path, path.p, path.entered);
+    a.x = pos.x;
+    a.y = pos.y;
+    if (!path.entered && this.onScreen(a)) path.entered = true;
   }
 
   // ---------------------------------------------------------------- update
@@ -711,6 +801,7 @@ export class Game {
       // Endless: show the next wave's shapes during the break, so a new one appears with its banner.
       shapes: this.endless && this.breakTimer > 0 ? endlessShapes(this.waveIndex + 1) : this.currentShapes(),
       endless: this.endless,
+      expert: this.expert,
     });
   }
 
@@ -746,6 +837,12 @@ export class Game {
       if (a.dead) continue;
       a.age += dt;
       a.rot += a.spin * dt;
+      if (a.path) {
+        this.followPath(a, a.path, dt);
+        const reached = a.path.p >= 1 || Math.hypot(a.x - this.cx, a.y - this.cy) < this.shipR + a.r * 0.6;
+        if (!attract && !a.targeted && reached) this.shipHit(a);
+        continue;
+      }
       const dx = this.cx - a.x;
       const dy = this.cy - a.y;
       const d = Math.hypot(dx, dy) || 1;
@@ -924,10 +1021,25 @@ export class Game {
     c.restore();
   }
 
+  /** FX lab only: dotted preview of the rest of an Expert route. */
+  private renderRoute(a: Asteroid, path: AsteroidPath): void {
+    const c = this.ctx;
+    c.beginPath();
+    for (let k = 0; k <= 120; k++) {
+      const { x, y } = this.routePoint(a, path, path.p + ((1 - path.p) * k) / 120, true);
+      if (k === 0) c.moveTo(x, y);
+      else c.lineTo(x, y);
+    }
+    c.setLineDash([4, 6]);
+    this.glow(SHAPES[a.shape].color, 1, 0.35);
+    c.setLineDash([]);
+  }
+
   private renderAsteroid(a: Asteroid): void {
     const c = this.ctx;
     const info = SHAPES[a.shape];
     const flash = a.targeted ? 0.6 + 0.4 * Math.sin(this.realTime * 40) : 1;
+    if (a.path && this.state === 'sandbox') this.renderRoute(a, a.path);
 
     if (!this.onScreen(a)) {
       // Edge indicator for incoming asteroids.

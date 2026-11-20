@@ -45,6 +45,9 @@ function playOpen(): void {
 }
 document.getElementById('blast-open')!.addEventListener('click', playOpen);
 
+// Expert mode routes, with a dotted preview of each one.
+document.getElementById('expert-paths')!.addEventListener('click', () => game.sandboxParade());
+
 // Start once the panel is fully built, so its final height is known.
 game.startSandbox(copies, panelInset());
 

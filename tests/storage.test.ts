@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it } from 'vitest';
-import { loadSave } from '../src/storage';
+import { loadSave, writeSave } from '../src/storage';
 
 const store = new Map<string, string>();
 (globalThis as unknown as { localStorage: Pick<Storage, 'getItem' | 'setItem'> }).localStorage = {
@@ -24,10 +24,33 @@ describe('save data', () => {
     expect(loadSave().unlocked).toBe(6);
   });
 
-  it('starts with no endless record and keeps saved ones', () => {
-    expect(loadSave().endlessBestWave).toBe(0);
-    store.set('shape-defense-v1', JSON.stringify({ unlocked: 2, endlessBestWave: 14, endlessBestScore: 52000 }));
-    expect(loadSave()).toMatchObject({ endlessBestWave: 14, endlessBestScore: 52000 });
+  it('starts with no records and Normal mode', () => {
+    const d = loadSave();
+    expect(d.expert).toBe(false);
+    expect(d.normal.endlessBestWave).toBe(0);
+    expect(d.expertRecords.best.every((b) => b === 0)).toBe(true);
+  });
+
+  it('moves records saved before Expert mode existed into Normal mode', () => {
+    const best = [1200, 3400, 0, 0, 0, 0, 0, 0, 0, 0];
+    store.set('shape-defense-v1', JSON.stringify({ unlocked: 4, best, stars: [3, 2, 0, 0, 0, 0, 0, 0, 0, 0], endlessBestWave: 14, endlessBestScore: 52000 }));
+    const d = loadSave();
+    expect(d.unlocked).toBe(4);
+    expect(d.normal).toMatchObject({ best, endlessBestWave: 14, endlessBestScore: 52000 });
+    expect(d.normal.stars[0]).toBe(3);
+    expect(d.expertRecords.endlessBestWave).toBe(0);
+  });
+
+  it('keeps Normal and Expert records apart, and remembers the selected mode', () => {
+    const d = loadSave();
+    d.expert = true;
+    d.expertRecords.endlessBestWave = 9;
+    d.normal.endlessBestWave = 20;
+    writeSave(d);
+    const back = loadSave();
+    expect(back.expert).toBe(true);
+    expect(back.expertRecords.endlessBestWave).toBe(9);
+    expect(back.normal.endlessBestWave).toBe(20);
   });
 
   it('migrates the old single mute switch', () => {

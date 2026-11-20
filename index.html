@@ -81,6 +81,11 @@
     <section id="screen-levels" class="screen hidden">
       <div class="panel wide">
         <h2>Select level</h2>
+        <div class="mode-switch" role="group" aria-label="Game mode">
+          <button data-mode="normal" aria-pressed="true">Normal</button>
+          <button data-mode="expert" aria-pressed="false">Expert</button>
+        </div>
+        <p class="mode-hint"></p>
         <div class="level-grid"></div>
         <div class="endless-slot"></div>
         <button class="btn" data-action="title">Back</button>

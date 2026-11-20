@@ -503,6 +503,53 @@ h2.danger {
   color: var(--muted);
 }
 
+/* Normal / Expert switch on the level select screen. */
+.mode-switch {
+  display: inline-flex;
+  padding: 4px;
+  gap: 4px;
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  background: rgba(255, 255, 255, 0.03);
+}
+
+.mode-switch button {
+  min-width: 110px;
+  padding: 8px 16px;
+  border: 0;
+  border-radius: 10px;
+  background: transparent;
+  color: var(--muted);
+  font: 800 14px var(--font);
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  cursor: pointer;
+}
+
+.mode-switch button[aria-pressed='true'] {
+  color: var(--text);
+  background: rgba(61, 245, 255, 0.15);
+  box-shadow: inset 0 0 0 1px var(--accent);
+}
+
+.mode-switch button[data-mode='expert'][aria-pressed='true'] {
+  background: rgba(255, 157, 61, 0.15);
+  box-shadow: inset 0 0 0 1px #ff9d3d, 0 0 14px rgba(255, 157, 61, 0.3);
+}
+
+.mode-hint {
+  color: var(--muted);
+  font-size: 13px;
+  margin: 10px 0 16px;
+  min-height: 1.2em;
+}
+
+/* Expert mode: warmer accent on the level select panel. */
+.panel.expert {
+  border-color: rgba(255, 157, 61, 0.45);
+  box-shadow: 0 0 40px rgba(255, 157, 61, 0.15), inset 0 0 30px rgba(255, 157, 61, 0.05);
+}
+
 /* Endless mode card: full width, under the level grid. */
 .endless-slot {
   margin-bottom: 20px;
