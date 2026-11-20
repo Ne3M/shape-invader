@@ -250,6 +250,52 @@ export class Sfx {
     }
   }
 
+  /**
+   * Bomb going off ("Prism"): a wide, thick A minor 9 synth chord (A2 E3 A3 C4 E4 G4 B4, three
+   * detuned saws per note) whose filter bursts open with the shockwave then slowly closes, over a
+   * deep falling hit and a short rumble.
+   */
+  bomb(): void {
+    this.tone('sine', 70, 28, 1.0, 0.45);
+    this.noise(0.6, 0.25, 900, 0, 1);
+    [110, 165, 220, 262, 330, 392, 494].forEach((f) => this.supersaw(f, 1.6, 0.05));
+  }
+
+  /** Three detuned saws through a low-pass that bursts open then slowly closes (a lush synth stab). */
+  private supersaw(f: number, dur: number, vol: number, delay = 0): void {
+    const { ctx, master } = this;
+    if (!ctx || !master || this._muted) return;
+    const t = ctx.currentTime + delay;
+    const lp = ctx.createBiquadFilter();
+    const g = ctx.createGain();
+    lp.type = 'lowpass';
+    lp.Q.value = 2;
+    lp.frequency.setValueAtTime(300, t);
+    lp.frequency.exponentialRampToValueAtTime(4500, t + 0.12);
+    lp.frequency.exponentialRampToValueAtTime(500, t + dur);
+    // Hold for a moment, then ring out (so the chord blooms instead of just blipping).
+    g.gain.setValueAtTime(0.0001, t);
+    g.gain.exponentialRampToValueAtTime(vol, t + 0.02);
+    g.gain.setValueAtTime(vol, t + dur * 0.25);
+    g.gain.exponentialRampToValueAtTime(0.0001, t + dur);
+    lp.connect(g).connect(master);
+    for (const cents of [-14, 0, 14]) {
+      const o = ctx.createOscillator();
+      o.type = 'sawtooth';
+      o.frequency.value = f;
+      o.detune.value = cents;
+      o.connect(lp);
+      o.start(t);
+      o.stop(t + dur + 0.02);
+    }
+  }
+
+  /** Bomb fully charged: short rising two-note chime. */
+  bombReady(): void {
+    this.tone('triangle', 659, 659, 0.16, 0.12);
+    this.tone('triangle', 988, 988, 0.28, 0.12, 0.1);
+  }
+
   hit(): void {
     this.noise(0.6, 0.6, 900, 0, 4);
     this.tone('square', 110, 30, 0.45, 0.3);

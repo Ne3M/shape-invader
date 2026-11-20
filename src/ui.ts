@@ -1,5 +1,5 @@
 import type { Sfx } from './audio';
-import type { Game, HudState, LevelResult } from './game';
+import { BOMB_CHARGE_TIME, type Game, type HudState, type LevelResult } from './game';
 import { LEVELS, LEVEL_COUNT, WAVES_PER_LEVEL, endlessShapes } from './levels';
 import { SHAPE_ORDER, SHAPES, demoStroke, shapeSvg } from './shapes';
 import { writeSave, type Records, type SaveData } from './storage';
@@ -14,7 +14,7 @@ const $ = <T extends HTMLElement = HTMLElement>(sel: string, root: ParentNode = 
 export class UI {
   private current: ScreenId | null = 'title';
   private selected = 0;
-  private hudCache = { shield: -1, score: -1, multiplier: -1, wave: -1, level: -1, shapes: '', expert: false };
+  private hudCache = { shield: -1, score: -1, multiplier: -1, wave: -1, level: -1, shapes: '', expert: false, bomb: -1 };
   private bannerTimer = 0;
 
   /** Records of the selected mode (Normal or Expert). */
@@ -46,6 +46,7 @@ export class UI {
       if (btn) this.action(btn.dataset.action!, btn);
     });
     $('#btn-pause').addEventListener('click', () => this.pause());
+    $('#btn-bomb').addEventListener('click', () => this.game.useBomb());
     // Normal / Expert switch on the level select screen.
     document.querySelectorAll<HTMLButtonElement>('[data-mode]').forEach((b) =>
       b.addEventListener('click', () => {
@@ -74,6 +75,11 @@ export class UI {
       if (e.key === 'Escape' || e.key === 'p') {
         if (this.game.isPlaying) this.pause();
         else if (this.current === 'pause') this.resume();
+      }
+      // Space: bomb (desktop shortcut).
+      if (e.key === ' ' && this.game.isPlaying) {
+        e.preventDefault();
+        this.game.useBomb();
       }
     });
     document.addEventListener('visibilitychange', () => {
@@ -209,7 +215,7 @@ export class UI {
 
   private startLevel(index: number): void {
     this.selected = index;
-    this.hudCache = { shield: -1, score: -1, multiplier: -1, wave: -1, level: -1, shapes: '', expert: !this.save.expert };
+    this.hudCache = { shield: -1, score: -1, multiplier: -1, wave: -1, level: -1, shapes: '', expert: !this.save.expert, bomb: -1 };
     this.show(null);
     if (index === ENDLESS) this.game.startEndless(this.save.expert);
     else this.game.startLevel(index, this.save.expert);
@@ -265,6 +271,16 @@ export class UI {
         $('.hud-wave').textContent = `Wave ${h.wave}/${WAVES_PER_LEVEL}`;
         $('.hud-level').textContent = `Level ${h.level}${h.expert ? ' · Expert' : ''}`;
       }
+    }
+    // Bomb charge ring (updated in small steps to avoid restyling every frame).
+    const bomb = Math.floor(h.bomb * 100) / 100;
+    if (bomb !== c.bomb) {
+      c.bomb = bomb;
+      const btn = $('#btn-bomb');
+      btn.style.setProperty('--charge', String(bomb));
+      btn.classList.toggle('ready', bomb >= 1);
+      btn.setAttribute('aria-disabled', String(bomb < 1));
+      btn.title = bomb >= 1 ? 'Bomb ready (Space)' : `Bomb charging… ${Math.max(1, Math.round((1 - h.bomb) * BOMB_CHARGE_TIME))} s`;
     }
     // Shapes in play (grows during an endless run).
     const key = h.shapes.join(',');

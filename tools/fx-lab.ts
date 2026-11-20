@@ -45,6 +45,12 @@ function playOpen(): void {
 }
 document.getElementById('blast-open')!.addEventListener('click', playOpen);
 
+// Bomb: in the lab it doesn't need charging.
+document.getElementById('bomb')!.addEventListener('click', () => {
+  sfx.unlock();
+  game.useBomb();
+});
+
 // Expert mode routes, with a dotted preview of each one.
 document.getElementById('expert-paths')!.addEventListener('click', () => game.sandboxParade());
 

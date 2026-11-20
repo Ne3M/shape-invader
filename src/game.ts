@@ -135,6 +135,8 @@ export interface HudState {
   shapes: ShapeId[];
   endless: boolean;
   expert: boolean;
+  /** Bomb charge, 0 → 1 (ready). */
+  bomb: number;
 }
 
 export interface LevelResult {
@@ -156,6 +158,11 @@ const HIT_DAMAGE = 22;
 const REGEN_DELAY = 2;
 const REGEN_RATE = 5;
 const BLAST_DUR = 0.45;
+/** Seconds of play for the bomb to charge, and how long its shockwave takes to reach the screen edge. */
+export const BOMB_CHARGE_TIME = 30;
+const BOMB_WAVE_DUR = 0.6;
+/** Points per asteroid destroyed by the bomb (no combo multiplier, no multi-kill bonus). */
+const BOMB_POINTS = 100;
 /** Pause after a wave is cleared, then delay before the next wave's first asteroid. */
 const WAVE_BREAK = 0.8;
 const WAVE_LEAD_IN = 0.6;
@@ -186,6 +193,10 @@ export class Game {
 
   private asteroids: Asteroid[] = [];
   private blasts: Blast[] = [];
+  /** Bomb: charge 0 → 1, its expanding shockwaves, and the screen flash. */
+  private bombCharge = 0;
+  private shockwaves: { t: number; maxR: number; targets: Asteroid[] }[] = [];
+  private flash = 0;
   private particles: Particle[] = [];
   private ghosts: Ghost[] = [];
   private bolts: Bolt[] = [];
@@ -280,8 +291,61 @@ export class Game {
     this.time = 0;
     this.cooldownUntil = 0;
     this.stroke = null;
+    this.bombCharge = 0;
+    this.shockwaves = [];
+    this.flash = 0;
     this.state = 'playing';
     this.beginWave();
+  }
+
+  get bombReady(): boolean {
+    return this.state === 'playing' && !this.dying && this.bombCharge >= 1;
+  }
+
+  /**
+   * Bomb: a shockwave from the ship destroys every asteroid on screen, whatever its shape.
+   * Needs a full charge (30 s of play) in a game; always available in the FX lab.
+   * Returns whether it went off.
+   */
+  useBomb(): boolean {
+    const sandbox = this.state === 'sandbox';
+    if (!sandbox && !this.bombReady) return false;
+    const targets = this.asteroids.filter((a) => !a.dead && !a.targeted && this.onScreen(a));
+    for (const a of targets) {
+      a.targeted = true;
+      a.points = sandbox ? 0 : BOMB_POINTS;
+    }
+    if (!sandbox) {
+      this.bombCharge = 0;
+      this.score += targets.length * BOMB_POINTS;
+      this.kills += targets.length;
+    }
+    this.shockwaves.push({ t: 0, maxR: this.halfDiag * 1.1, targets });
+    this.flash = 1;
+    this.shake = Math.max(this.shake, 18);
+    this.shipPulse = 1;
+    this.sfx.bomb();
+    this.floater(this.cx, this.cy - this.shipR * 3.2, targets.length ? `BOMB ×${targets.length}` : 'BOMB', '#ffffff', 24, 1.2);
+    this.cancelStroke();
+    return true;
+  }
+
+  private updateShockwaves(dt: number): void {
+    for (const w of this.shockwaves) {
+      w.t += dt;
+      const k = Math.min(1, w.t / BOMB_WAVE_DUR);
+      const radius = (1 - (1 - k) ** 2) * w.maxR; // fast then easing out
+      let order = 0;
+      for (const a of w.targets) {
+        if (a.dead) continue;
+        if (radius >= Math.hypot(a.x - this.cx, a.y - this.cy) - a.r) this.destroy(a, order++, false, order > 8);
+      }
+    }
+    for (const w of this.shockwaves) {
+      // Safety net: anything the wave somehow missed still goes when it ends.
+      if (w.t >= BOMB_WAVE_DUR) w.targets.forEach((a, i) => !a.dead && this.destroy(a, i, false, true));
+    }
+    this.shockwaves = this.shockwaves.filter((w) => w.t < BOMB_WAVE_DUR + 0.35);
   }
 
   pause(): void {
@@ -578,14 +642,15 @@ export class Game {
     }
   }
 
-  private destroy(a: Asteroid, order: number, attract: boolean): void {
+  /** `silent`: no sound (a bomb clearing many asteroids plays only the first few, to stay listenable). */
+  private destroy(a: Asteroid, order: number, attract: boolean, silent = false): void {
     a.dead = true;
     const color = SHAPES[a.shape].color;
     this.ghosts.push({ shape: a.shape, x: a.x, y: a.y, r: a.r, rot: a.rot, life: 0.45, max: 0.45 });
     this.burst(a.x, a.y, color, 22, a.r * 4);
     this.burst(a.x, a.y, '#ffffff', 6, a.r * 3);
     if (!attract) {
-      this.sfx.explode(a.shape, order);
+      if (!silent) this.sfx.explode(a.shape, order);
       const pts = a.points;
       if (pts) this.floater(a.x, a.y, `+${pts}`, color, 15);
     }
@@ -745,8 +810,18 @@ export class Game {
       this.updateSandbox();
       this.updateAsteroids(dt, false);
       this.updateBlasts(dt, false);
+      this.updateShockwaves(dt);
       effects();
       return;
+    }
+
+    // Bomb charges during play (not while paused: update() returns early then).
+    if (!this.dying && this.bombCharge < 1) {
+      this.bombCharge = Math.min(1, this.bombCharge + dt / BOMB_CHARGE_TIME);
+      if (this.bombCharge >= 1) {
+        this.sfx.bombReady();
+        this.floater(this.cx, this.cy + this.shipR * 3.4, 'Bomb ready', '#ffffff', 16, 1.2);
+      }
     }
 
     if (this.endTimer > 0) {
@@ -774,10 +849,11 @@ export class Game {
 
     this.updateAsteroids(dt, false);
     this.updateBlasts(dt, false);
+    this.updateShockwaves(dt);
     effects();
 
     // Wave cleared?
-    if (!this.dying && this.endTimer <= 0 && this.breakTimer <= 0 && this.toSpawn === 0 && this.asteroids.length === 0 && this.blasts.length === 0) {
+    if (!this.dying && this.endTimer <= 0 && this.breakTimer <= 0 && this.toSpawn === 0 && this.asteroids.length === 0 && this.blasts.length === 0 && this.shockwaves.length === 0) {
       if (this.isLastWave(this.waveIndex)) {
         this.endTimer = 1.4;
         this.sfx.levelComplete();
@@ -802,6 +878,7 @@ export class Game {
       shapes: this.endless && this.breakTimer > 0 ? endlessShapes(this.waveIndex + 1) : this.currentShapes(),
       endless: this.endless,
       expert: this.expert,
+      bomb: this.bombCharge,
     });
   }
 
@@ -889,6 +966,7 @@ export class Game {
     this.floaters = this.floaters.filter((f) => f.life > 0);
     for (const s of this.fading) s.life -= dt;
     this.fading = this.fading.filter((s) => s.life > 0);
+    this.flash = Math.max(0, this.flash - dt * 2.5);
     this.shake = Math.max(0, this.shake - dt * 60);
     this.shipPulse = Math.max(0, this.shipPulse - dt * 3);
     let da = this.shipTargetAngle - this.shipAngle;
@@ -979,6 +1057,7 @@ export class Game {
     c.globalCompositeOperation = 'lighter';
 
     this.renderBlasts();
+    this.renderShockwaves();
     for (const g of this.ghosts) {
       const k = g.life / g.max;
       traceGlyph(c, g.shape, g.x, g.y, g.r * (1 + (1 - k) * 1.2), g.rot);
@@ -1019,6 +1098,16 @@ export class Game {
     c.shadowBlur = 0;
     c.globalAlpha = 1;
     c.restore();
+
+    // Bomb flash over the whole screen.
+    if (this.flash > 0) {
+      c.globalCompositeOperation = 'lighter';
+      c.globalAlpha = this.flash * 0.45;
+      c.fillStyle = '#cfefff';
+      c.fillRect(0, 0, this.w, this.h);
+      c.globalAlpha = 1;
+      c.globalCompositeOperation = 'source-over';
+    }
   }
 
   /** FX lab only: dotted preview of the rest of an Expert route. */
@@ -1086,6 +1175,25 @@ export class Game {
       this.glow(info.color, 1, 0.35 * flash);
       traceGlyph(c, a.shape, a.x, a.y, a.r * 0.68, a.rot * 0.25);
       this.glow(info.color, 2.6, flash);
+    }
+  }
+
+  /** Bomb shockwave: a thick white ring with rings in every shape color trailing behind. */
+  private renderShockwaves(): void {
+    const c = this.ctx;
+    const colors = SHAPE_ORDER.map((s) => SHAPES[s].color);
+    for (const w of this.shockwaves) {
+      const k = Math.min(1, w.t / BOMB_WAVE_DUR);
+      const radius = (1 - (1 - k) ** 2) * w.maxR;
+      const fade = w.t < BOMB_WAVE_DUR ? 1 : Math.max(0, 1 - (w.t - BOMB_WAVE_DUR) / 0.35);
+      colors.forEach((col, i) => {
+        c.beginPath();
+        c.arc(this.cx, this.cy, Math.max(1, radius - i * 9), 0, Math.PI * 2);
+        this.glow(col, 2, fade * (1 - i / colors.length) * 0.8);
+      });
+      c.beginPath();
+      c.arc(this.cx, this.cy, Math.max(1, radius), 0, Math.PI * 2);
+      this.glow('#ffffff', 6, fade);
     }
   }
 

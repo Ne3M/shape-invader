@@ -126,6 +126,8 @@ body {
 }
 
 .hud-legend {
+  /* keep clear of the bomb button (bottom-left) and the sound buttons (bottom-right) */
+  padding: 0 88px;
   display: flex;
   justify-content: center;
   gap: 10px;
@@ -152,6 +154,59 @@ body {
 
 .icon-btn:hover {
   border-color: var(--accent);
+}
+
+/* Bomb: charge shown as a ring that fills up; pulses when ready. Bottom-left, thumb-sized. */
+.bomb-btn {
+  --charge: 0;
+  position: fixed;
+  left: max(12px, env(safe-area-inset-left));
+  bottom: max(12px, env(safe-area-inset-bottom));
+  width: 68px;
+  height: 68px;
+  border-radius: 50%;
+  border: 0;
+  padding: 0;
+  display: grid;
+  place-items: center;
+  align-content: center;
+  pointer-events: auto;
+  cursor: pointer;
+  color: var(--muted);
+  font: 800 9px var(--font);
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  /* ring: filled part in white, rest dim; inner disc dark */
+  background:
+    radial-gradient(circle, rgba(10, 14, 36, 0.92) 60%, transparent 61%),
+    conic-gradient(rgba(255, 255, 255, 0.85) calc(var(--charge) * 360deg), rgba(255, 255, 255, 0.12) 0);
+  transition: color 0.2s, transform 0.1s;
+}
+
+.bomb-btn:active {
+  transform: scale(0.94);
+}
+
+.bomb-btn.ready {
+  color: #fff;
+  background:
+    radial-gradient(circle, rgba(40, 20, 50, 0.95) 60%, transparent 61%),
+    conic-gradient(from 0deg, #3df5ff, #ff4fd8, #ffe14a, #ff9d3d, #7dff6a, #b98cff, #4d9bff, #ff4f64, #3df5ff);
+  animation: bomb-pulse 1.1s ease-in-out infinite;
+}
+
+.bomb-label {
+  margin-top: -2px;
+}
+
+@keyframes bomb-pulse {
+  0%,
+  100% {
+    box-shadow: 0 0 10px rgba(255, 255, 255, 0.35);
+  }
+  50% {
+    box-shadow: 0 0 26px rgba(255, 79, 216, 0.75), 0 0 6px #fff;
+  }
 }
 
 .audio-btns {
