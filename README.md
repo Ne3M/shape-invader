@@ -7,6 +7,7 @@ Browser game: asteroids shaped like circles, triangles, squares, infinity signs,
 ```bash
 npm install
 npm run dev      # http://localhost:5173 (also reachable from your phone on the same network)
+npm run lab      # FX lab (dev only): click or draw each shape to check its blast, effects and sound
 npm test         # recognizer accuracy tests
 npm run build    # static files in dist/
 ```

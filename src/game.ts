@@ -3,7 +3,19 @@ import { LEVELS, WAVES_PER_LEVEL, makeWave, pickWeighted, type WaveDef } from '.
 import { MIN_STROKE_SIZE, recognize } from './recognizer';
 import { SHAPE_ORDER, SHAPES, traceGlyph, type Pt, type ShapeId } from './shapes';
 
-type State = 'menu' | 'playing' | 'paused' | 'over' | 'complete';
+/** 'sandbox' is only used by the FX lab test page (tools/fx-lab.html), never by the game. */
+type State = 'menu' | 'playing' | 'paused' | 'over' | 'complete' | 'sandbox';
+
+interface SandboxSlot {
+  shape: ShapeId;
+  angle: number;
+  radius: number;
+  ast: Asteroid | null;
+  respawnAt: number;
+}
+
+/** Delay before a destroyed shape reappears in the FX lab. */
+const SANDBOX_RESPAWN = 1;
 
 interface Asteroid {
   shape: ShapeId;
@@ -235,6 +247,69 @@ export class Game {
     return this.state === 'playing';
   }
 
+  // ---------------------------------------------------------------- FX lab (test page only)
+
+  private slots: SandboxSlot[] = [];
+
+  /** Stationary ring of shapes around the ship; each one comes back 1 s after being destroyed. */
+  startSandbox(copies = 1, topInset = 0): void {
+    this.state = 'sandbox';
+    this.asteroids = [];
+    this.blasts = [];
+    this.queued = null;
+    this.dying = false;
+    this.breakTimer = 0;
+    this.endTimer = 0;
+    this.shield = SHIELD_MAX;
+    this.cancelStroke();
+    this.layoutSandbox(copies, topInset);
+  }
+
+  /** Blasts a shape exactly as if the player had drawn it. */
+  triggerShape(shape: ShapeId): void {
+    if (this.state !== 'sandbox') return;
+    const at = { x: this.cx, y: this.cy - this.shipR * 3 };
+    if (this.time < this.cooldownUntil) this.queued = { shape, at };
+    else this.fire(shape, at);
+  }
+
+  private layoutSandbox(copies: number, topInset: number): void {
+    // Fit the ring (outermost copies included) in the space left free by the page's panel.
+    // Copies of a shape are stacked outward; they squeeze together (down to a slight overlap)
+    // rather than spill under the panel, and never get close enough to touch the ship.
+    const outer = Math.min(this.w / 2, this.h / 2 - topInset) - this.astR * 1.2;
+    const innerMin = this.shipR * 1.9 + this.astR * 1.2;
+    const spacing = copies > 1 ? clamp((outer - innerMin) / (copies - 1), this.astR * 1.5, this.astR * 2.2) : 0;
+    const inner = Math.max(innerMin, outer - spacing * (copies - 1));
+    const single = Math.max(innerMin, Math.min(outer, Math.min(this.w, this.h) * 0.32));
+    this.slots = [];
+    SHAPE_ORDER.forEach((shape, i) => {
+      const angle = -Math.PI / 2 + (i / SHAPE_ORDER.length) * Math.PI * 2;
+      for (let c = 0; c < copies; c++) {
+        const radius = copies === 1 ? single : inner + c * spacing;
+        this.slots.push({ shape, angle, radius, ast: null, respawnAt: 0 });
+      }
+    });
+  }
+
+  private updateSandbox(): void {
+    for (const s of this.slots) {
+      if (s.ast && s.ast.dead) {
+        s.ast = null;
+        s.respawnAt = this.time + SANDBOX_RESPAWN;
+      }
+      if (!s.ast && this.time >= s.respawnAt) {
+        this.spawn(s.shape, 0, 1);
+        const a = this.asteroids[this.asteroids.length - 1];
+        a.x = this.cx + Math.cos(s.angle) * s.radius;
+        a.y = this.cy + Math.sin(s.angle) * s.radius;
+        a.speed = 0;
+        s.ast = a;
+        this.burst(a.x, a.y, SHAPES[s.shape].color, 8, a.r * 1.5);
+      }
+    }
+  }
+
   private waveTitle(index: number): string {
     return index === WAVES_PER_LEVEL - 1 ? 'Final wave' : `Wave ${index + 1}`;
   }
@@ -275,7 +350,7 @@ export class Game {
       return { x: e.clientX - r.left, y: e.clientY - r.top };
     };
     c.addEventListener('pointerdown', (e) => {
-      if (this.state !== 'playing' || this.dying || this.stroke) return;
+      if ((this.state !== 'playing' && this.state !== 'sandbox') || this.dying || this.stroke) return;
       if (e.pointerType === 'mouse' && e.button !== 0) return;
       e.preventDefault();
       this.sfx.unlock();
@@ -299,7 +374,7 @@ export class Game {
       const pts = this.stroke;
       this.stroke = null;
       this.strokePointer = -1;
-      if (this.state === 'playing' && !this.dying) this.handleStroke(pts);
+      if ((this.state === 'playing' || this.state === 'sandbox') && !this.dying) this.handleStroke(pts);
     };
     c.addEventListener('pointerup', end);
     c.addEventListener('pointercancel', () => this.cancelStroke());
@@ -318,7 +393,15 @@ export class Game {
       minY = Math.min(minY, p.y); maxY = Math.max(maxY, p.y);
       sx += p.x; sy += p.y;
     }
-    if (Math.max(maxX - minX, maxY - minY) < MIN_STROKE_SIZE) return; // a tap
+    if (Math.max(maxX - minX, maxY - minY) < MIN_STROKE_SIZE) {
+      // A tap. In the FX lab, tapping a shape blasts it.
+      if (this.state === 'sandbox') {
+        const p = pts[pts.length - 1];
+        const hit = this.asteroids.find((a) => !a.dead && !a.targeted && Math.hypot(a.x - p.x, a.y - p.y) < a.r * 1.2);
+        if (hit) this.triggerShape(hit.shape);
+      }
+      return;
+    }
     const at = { x: sx / pts.length, y: sy / pts.length };
     const res = recognize(pts);
     const color = res.shape ? SHAPES[res.shape].color : '#8a90a8';
@@ -509,11 +592,19 @@ export class Game {
       return;
     }
 
-    // Playing.
+    // Playing (or FX lab).
     if (this.queued && this.time >= this.cooldownUntil) {
       const q = this.queued;
       this.queued = null;
       this.fire(q.shape, q.at);
+    }
+
+    if (this.state === 'sandbox') {
+      this.updateSandbox();
+      this.updateAsteroids(dt, false);
+      this.updateBlasts(dt, false);
+      effects();
+      return;
     }
 
     if (this.endTimer > 0) {

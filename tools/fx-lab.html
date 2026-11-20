@@ -1,0 +1,98 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
+    <meta name="robots" content="noindex" />
+    <link rel="icon" href="/favicon.ico" />
+    <title>FX Lab · Shape Invaders</title>
+    <style>
+      .lab {
+        position: fixed;
+        z-index: 10;
+        top: max(10px, env(safe-area-inset-top));
+        left: max(10px, env(safe-area-inset-left));
+        right: max(10px, env(safe-area-inset-right));
+        display: flex;
+        flex-wrap: wrap;
+        align-items: center;
+        gap: 8px 14px;
+        padding: 10px 12px;
+        border: 1px solid var(--line);
+        border-radius: 14px;
+        background: rgba(10, 14, 36, 0.8);
+        backdrop-filter: blur(6px);
+        font-size: 13px;
+        pointer-events: auto;
+      }
+      .lab h1 {
+        margin: 0;
+        font-size: 14px;
+        letter-spacing: 0.15em;
+        text-transform: uppercase;
+        color: var(--accent);
+      }
+      .lab .hint {
+        color: var(--muted);
+        flex-basis: 100%;
+        margin: -2px 0 0;
+      }
+      .lab .group {
+        display: flex;
+        align-items: center;
+        gap: 6px;
+      }
+      .lab .label {
+        color: var(--muted);
+        text-transform: uppercase;
+        letter-spacing: 0.1em;
+        font-size: 11px;
+      }
+      .lab button {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        padding: 5px 9px;
+        border-radius: 9px;
+        border: 1px solid var(--line);
+        background: rgba(255, 255, 255, 0.04);
+        color: var(--text);
+        font: 600 12px var(--font);
+        cursor: pointer;
+      }
+      .lab button:hover {
+        border-color: var(--accent);
+      }
+      .lab button[aria-pressed='true'] {
+        border-color: var(--accent);
+        background: rgba(61, 245, 255, 0.15);
+      }
+      .lab .shape-icon {
+        width: 18px;
+        height: 18px;
+      }
+    </style>
+  </head>
+  <body>
+    <canvas id="game"></canvas>
+
+    <div class="lab">
+      <h1>FX Lab</h1>
+      <div class="group shapes"></div>
+      <div class="group">
+        <span class="label">Copies</span>
+        <button data-copies="1" aria-pressed="true">1</button>
+        <button data-copies="2" aria-pressed="false">2</button>
+        <button data-copies="3" aria-pressed="false">3</button>
+      </div>
+      <div class="group">
+        <button id="blast-all">Blast all</button>
+        <button id="sfx-toggle" aria-pressed="true">Sound FX</button>
+        <button id="music-toggle" aria-pressed="false">Music</button>
+      </div>
+      <p class="hint">Tap a shape, use the buttons, or draw a shape anywhere (tests recognition too). Shapes come back after 1 s. Not part of the game.</p>
+    </div>
+
+    <script type="module" src="./fx-lab.ts"></script>
+  </body>
+</html>
