@@ -3,10 +3,17 @@ import type { Pt, ShapeId } from './shapes';
 /**
  * Single-stroke shape recognizer.
  *
- * The stroke is first classified as closed or open. Closed strokes are told apart by
- * how many sharp corners they have and how much they turn in total (an infinity sign's
- * turning cancels out). Open strokes are told apart by straightness, corner count and corner
- * sharpness (a wave curves smoothly, a zigzag turns abruptly).
+ * The stroke is first classified as closed or open.
+ *
+ * Closed strokes are told apart by what the eye sees rather than by counting sharp corners
+ * (hand-drawn corners are often rounded, cut short or curved):
+ * - an infinity sign's two loops turn in opposite directions, so their areas cancel out;
+ * - a square's sides run in 4 directions 90° apart, a triangle's in 3 directions 120° apart,
+ *   and a circle has no dominant direction. This is measured with the 3-fold and 4-fold
+ *   symmetry of the stroke's directions, which ignores how the corners are drawn.
+ *
+ * Open strokes are told apart by straightness, corner count and corner sharpness
+ * (a wave curves smoothly, a zigzag turns abruptly).
  * Everything is rotation, scale and direction independent.
  */
 
@@ -15,7 +22,15 @@ export interface Recognition {
   closed: boolean;
   corners: number;
   sharpness?: number;
+  /** Closed strokes: 3-fold / 4-fold direction symmetry (0–1) and loop-area ratio (0 = loops cancel). */
+  h3?: number;
+  h4?: number;
+  area?: number;
 }
+
+/** Closed-shape thresholds. */
+const INFINITY_AREA = 0.35; // signed area / convex hull area below this: two loops cancelling out
+const POLYGON_SYMMETRY = 0.4; // h3 or h4 above this: a triangle or square rather than a circle
 
 const N = 64;
 const DEG = Math.PI / 180;
@@ -76,6 +91,56 @@ function turnAt(p: Pt[], i: number, k: number, closed: boolean): number {
   const bx = c.x - b.x;
   const by = c.y - b.y;
   return Math.atan2(ax * by - ay * bx, ax * bx + ay * by);
+}
+
+/** Shoelace signed area of a closed polygon. */
+function signedArea(p: Pt[]): number {
+  let a = 0;
+  for (let i = 0; i < p.length; i++) {
+    const q = p[(i + 1) % p.length];
+    a += p[i].x * q.y - q.x * p[i].y;
+  }
+  return a / 2;
+}
+
+/** Area of the convex hull (monotone chain). */
+function convexHullArea(p: Pt[]): number {
+  const s = [...p].sort((a, b) => a.x - b.x || a.y - b.y);
+  const cross = (o: Pt, a: Pt, b: Pt) => (a.x - o.x) * (b.y - o.y) - (a.y - o.y) * (b.x - o.x);
+  const half = (list: Pt[]) => {
+    const h: Pt[] = [];
+    for (const q of list) {
+      while (h.length >= 2 && cross(h[h.length - 2], h[h.length - 1], q) <= 0) h.pop();
+      h.push(q);
+    }
+    h.pop();
+    return h;
+  };
+  return Math.abs(signedArea([...half(s), ...half([...s].reverse())]));
+}
+
+/**
+ * How strongly the stroke's directions show n-fold symmetry (0–1), weighted by length.
+ * Directions 360/n degrees apart count as the same, so a square's 4 sides (90° apart) all add up for
+ * n = 4 and a triangle's 3 sides (120° apart) for n = 3, whatever the rotation, the side lengths
+ * (rectangles too) or the way the corners are drawn. A circle spreads evenly: close to 0.
+ */
+function directionSymmetry(p: Pt[], n: number): number {
+  let sx = 0;
+  let sy = 0;
+  let total = 0;
+  for (let i = 0; i < p.length; i++) {
+    const q = p[(i + 1) % p.length];
+    const dx = q.x - p[i].x;
+    const dy = q.y - p[i].y;
+    const len = Math.hypot(dx, dy);
+    if (len === 0) continue;
+    const a = Math.atan2(dy, dx) * n;
+    sx += len * Math.cos(a);
+    sy += len * Math.sin(a);
+    total += len;
+  }
+  return total > 0 ? Math.hypot(sx, sy) / total : 0;
 }
 
 interface Corner {
@@ -141,24 +206,18 @@ export function recognize(raw: Pt[]): Recognition {
   if (closed) {
     const loop = pts.slice(0, bestJ + 1);
     const p = smooth(resample([...loop, loop[0]], N + 1).slice(0, N), true, 2);
+    const corners = findCorners(p, 3, 45 * DEG, true).length; // kept for debugging only
 
-    let total = 0;
-    for (let i = 0; i < N; i++) total += turnAt(p, i, 1, true);
-    const s = Math.sign(total) || 1;
-    const corners = findCorners(p, 3, 45 * DEG, true);
-    const pos = corners.filter((c) => Math.sign(c.theta) === s).length;
-    const neg = corners.length - pos;
+    const hull = convexHullArea(p);
+    const area = hull > 0 ? Math.abs(signedArea(p)) / hull : 0;
+    const h3 = directionSymmetry(p, 3);
+    const h4 = directionSymmetry(p, 4);
 
-    let shape: ShapeId | null;
-    // A figure-8 turns one way then the other: its total turning cancels out.
-    // Circles, triangles and squares all turn a full 360° in one direction.
-    if (Math.abs(total) < Math.PI) shape = 'infinity';
-    else if (neg >= 2) shape = null; // concave scribble
-    else if (pos <= 2) shape = 'circle';
-    else if (pos === 3) shape = 'triangle';
-    else if (pos === 4) shape = 'square';
-    else shape = null;
-    return { shape, closed: true, corners: corners.length };
+    let shape: ShapeId;
+    if (area < INFINITY_AREA) shape = 'infinity';
+    else if (Math.max(h3, h4) < POLYGON_SYMMETRY) shape = 'circle';
+    else shape = h4 > h3 ? 'square' : 'triangle';
+    return { shape, closed: true, corners, h3, h4, area };
   }
 
   // Open strokes.

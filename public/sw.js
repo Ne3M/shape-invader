@@ -1,6 +1,6 @@
 // Service worker: makes the game installable and playable offline.
 // Bump VERSION to force old caches to be cleared.
-const VERSION = 'v7';
+const VERSION = 'v8';
 const CACHE = `shape-invaders-${VERSION}`;
 const CORE = [
   './',

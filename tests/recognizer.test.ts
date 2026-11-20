@@ -113,7 +113,113 @@ function ideal(shape: ShapeId, r: Rng): Pt[] {
 
 /** Places a normalized stroke on screen with random rotation/scale and hand-like wobble and uneven sampling. */
 function handDrawn(shape: ShapeId, r: Rng): Pt[] {
-  const pts = ideal(shape, r);
+  return place(ideal(shape, r), r);
+}
+
+// ---- Sloppy shapes, as players actually draw them -----------------------------------------
+
+/** Densifies a polyline, then optionally bends each edge outward/inward (bulge, as a fraction of its length). */
+function edges(verts: Pt[], bulge: (i: number) => number = () => 0): Pt[] {
+  const out: Pt[] = [];
+  for (let i = 1; i < verts.length; i++) {
+    const a = verts[i - 1];
+    const b = verts[i];
+    const len = Math.hypot(b.x - a.x, b.y - a.y);
+    const nx = (b.y - a.y) / len;
+    const ny = -(b.x - a.x) / len;
+    const k = bulge(i - 1) * len;
+    for (let s = 0; s < 30; s++) {
+      const t = s / 30;
+      const off = 4 * t * (1 - t) * k;
+      out.push({ x: a.x + (b.x - a.x) * t + nx * off, y: a.y + (b.y - a.y) * t + ny * off });
+    }
+  }
+  out.push(verts[verts.length - 1]);
+  return out;
+}
+
+/** Replaces corner `i` of a closed polygon by a cut (chamfer) or a rounded arc of size `f` × side. */
+function softenCorner(verts: Pt[], i: number, f: number, rounded: boolean): Pt[] {
+  const n = verts.length;
+  const p = verts[i];
+  const a = verts[(i - 1 + n) % n];
+  const b = verts[(i + 1) % n];
+  const lerp = (u: Pt, v: Pt, t: number) => ({ x: u.x + (v.x - u.x) * t, y: u.y + (v.y - u.y) * t });
+  const da = Math.hypot(a.x - p.x, a.y - p.y);
+  const db = Math.hypot(b.x - p.x, b.y - p.y);
+  const p1 = lerp(p, a, Math.min(0.45, (f * 2) / da));
+  const p2 = lerp(p, b, Math.min(0.45, (f * 2) / db));
+  // Quadratic curve through the corner (rounded) or a straight cut (chamfer).
+  const mid = rounded
+    ? Array.from({ length: 6 }, (_, k) => {
+        const t = (k + 1) / 7;
+        return { x: (1 - t) ** 2 * p1.x + 2 * (1 - t) * t * p.x + t * t * p2.x, y: (1 - t) ** 2 * p1.y + 2 * (1 - t) * t * p.y + t * t * p2.y };
+      })
+    : [];
+  return [...verts.slice(0, i), p1, ...mid, p2, ...verts.slice(i + 1)];
+}
+
+type SquareFlaw = 'rounded' | 'chamfer' | 'bowed' | 'crossed';
+
+/** A square/rectangle with the flaws players report: a sloppy corner, curved sides, or the last side
+ *  crossing the first one at the end of the stroke. */
+function sloppySquare(r: Rng, flaw: SquareFlaw): Pt[] {
+  const asp = rand(r, 0.75, 1.3);
+  let v: Pt[] = [
+    { x: -asp, y: -1 },
+    { x: asp, y: -1 },
+    { x: asp, y: 1 },
+    { x: -asp, y: 1 },
+  ].map((p) => ({ x: p.x + rand(r, -0.08, 0.08), y: p.y + rand(r, -0.08, 0.08) }));
+  if (r() < 0.5) v.reverse();
+  v = rotateStart(v, Math.floor(r() * 4));
+
+  if (flaw === 'rounded' || flaw === 'chamfer') {
+    // One badly drawn corner (sometimes two), plus slightly soft other corners.
+    const bad = Math.floor(r() * 4);
+    const second = r() < 0.4 ? (bad + 2) % 4 : -1;
+    for (let i = 3; i >= 0; i--) {
+      const f = i === bad || i === second ? rand(r, 0.2, 0.35) : rand(r, 0, 0.08);
+      if (f > 0.01) v = softenCorner(v, i, f, flaw === 'rounded' || i !== bad);
+    }
+    const start = v[0];
+    return edges([...v, start]);
+  }
+  if (flaw === 'bowed') {
+    // One or two sides drawn as curves.
+    const curved = new Set([Math.floor(r() * 4), r() < 0.5 ? Math.floor(r() * 4) : -1]);
+    return edges([...v, v[0]], (i) => (curved.has(i) ? rand(r, 0.1, 0.2) * (r() < 0.5 ? 1 : -1) : 0));
+  }
+  // 'crossed': a short lead-in before the first corner, and the last side runs on past it,
+  // so the last side crosses the first one.
+  const lead = rand(r, 0.06, 0.15);
+  const over = rand(r, 0.06, 0.2);
+  const ext = (p: Pt, q: Pt, f: number) => ({ x: p.x + (p.x - q.x) * f, y: p.y + (p.y - q.y) * f });
+  return edges([ext(v[0], v[1], lead), v[1], v[2], v[3], v[0], ext(v[0], v[3], over)]);
+}
+
+/** Triangles with soft corners and circles with lumps: must not be mistaken for squares. */
+function roundedTriangle(r: Rng): Pt[] {
+  let v = Array.from({ length: 3 }, (_, i) => {
+    const a = (i / 3) * Math.PI * 2 + rand(r, -0.15, 0.15);
+    return { x: Math.cos(a), y: Math.sin(a) };
+  });
+  for (let i = 2; i >= 0; i--) v = softenCorner(v, i, rand(r, 0.05, 0.22), true);
+  return edges([...v, v[0]]);
+}
+
+function lumpyCircle(r: Rng): Pt[] {
+  const asp = rand(r, 0.8, 1.2);
+  const lumps = [2, 3, 5].map((k) => ({ k, a: rand(r, 0, 0.05), ph: rand(r, 0, 6.3) }));
+  const a0 = rand(r, 0, 6.3);
+  return Array.from({ length: 120 }, (_, i) => {
+    const t = a0 + (i / 119) * Math.PI * 2;
+    const rad = 1 + lumps.reduce((s, l) => s + l.a * Math.sin(l.k * t + l.ph), 0);
+    return { x: Math.cos(t) * rad * asp, y: Math.sin(t) * rad };
+  });
+}
+
+function place(pts: Pt[], r: Rng): Pt[] {
   const rot = rand(r, 0, Math.PI * 2);
   const size = rand(r, 70, 160);
   const c = Math.cos(rot);
@@ -161,7 +267,34 @@ describe('recognizer', () => {
     }
   });
 
+  // Reported by players: squares read as triangles (sloppy corner), circles (curved sides) or
+  // infinity signs (last side crossing the first one).
+  const sloppy: [string, ShapeId, (r: Rng) => Pt[]][] = [
+    ['square, one sloppy rounded corner', 'square', (r) => sloppySquare(r, 'rounded')],
+    ['square, one corner cut short', 'square', (r) => sloppySquare(r, 'chamfer')],
+    ['square, curved sides', 'square', (r) => sloppySquare(r, 'bowed')],
+    ['square, last side crossing the first', 'square', (r) => sloppySquare(r, 'crossed')],
+    ['triangle, rounded corners', 'triangle', roundedTriangle],
+    ['circle, lumpy', 'circle', lumpyCircle],
+  ];
+  for (const [name, expected, gen] of sloppy) {
+    it(`recognizes ${name}`, () => {
+      const r = mulberry32(name.length * 104729);
+      const wrong: Record<string, number> = {};
+      let ok = 0;
+      const N = 300;
+      for (let i = 0; i < N; i++) {
+        const got = recognize(place(gen(r), r)).shape;
+        if (got === expected) ok++;
+        else wrong[String(got)] = (wrong[String(got)] ?? 0) + 1;
+      }
+      console.log(`${name.padEnd(38)} ${((ok / N) * 100).toFixed(1)}%`, wrong);
+      expect(ok / N).toBeGreaterThan(0.9);
+    });
+  }
+
   it('ignores taps', () => {
     expect(recognize([{ x: 10, y: 10 }, { x: 12, y: 11 }, { x: 13, y: 12 }, { x: 14, y: 12 }]).shape).toBeNull();
   });
 });
+
