@@ -1,34 +1,76 @@
-/** Synthesized sound effects with Web Audio. No audio files. */
+import { Music, type MusicMode } from './music';
+
+const SFX_VOLUME = 0.5;
+const MUSIC_VOLUME = 0.35;
+
+/**
+ * All game audio, synthesized with Web Audio (no audio files).
+ * Sound effects and music go through separate buses so each can be muted on its own.
+ */
 export class Sfx {
   private ctx?: AudioContext;
+  /** Sound effects bus. */
   private master?: GainNode;
+  private musicBus?: GainNode;
+  private music?: Music;
   private noiseBuf?: AudioBuffer;
   private _muted = false;
-
-  get muted() {
-    return this._muted;
-  }
+  private musicMuted = false;
+  private musicMode: MusicMode = 'menu';
 
   /** Must be called from a user gesture (browsers block audio until then). */
   unlock(): void {
     if (!this.ctx) {
       const Ctx = window.AudioContext ?? (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext;
       if (!Ctx) return;
-      this.ctx = new Ctx();
-      this.master = this.ctx.createGain();
-      this.master.gain.value = this._muted ? 0 : 0.5;
-      this.master.connect(this.ctx.destination);
-      const len = this.ctx.sampleRate;
-      this.noiseBuf = this.ctx.createBuffer(1, len, this.ctx.sampleRate);
+      const ctx = new Ctx();
+      this.ctx = ctx;
+      const comp = ctx.createDynamicsCompressor();
+      comp.threshold.value = -12;
+      comp.connect(ctx.destination);
+      this.master = ctx.createGain();
+      this.master.gain.value = this._muted ? 0 : SFX_VOLUME;
+      this.master.connect(comp);
+      this.musicBus = ctx.createGain();
+      this.musicBus.gain.value = this.musicMuted ? 0 : MUSIC_VOLUME;
+      this.musicBus.connect(comp);
+      const len = ctx.sampleRate;
+      this.noiseBuf = ctx.createBuffer(1, len, ctx.sampleRate);
       const d = this.noiseBuf.getChannelData(0);
       for (let i = 0; i < len; i++) d[i] = Math.random() * 2 - 1;
+      this.music = new Music(ctx, this.musicBus, this.noiseBuf);
+      this.music.setMode(this.musicMode);
+      if (!this.musicMuted) this.music.start();
     }
     if (this.ctx.state === 'suspended') void this.ctx.resume();
   }
 
+  /** Silences everything while the tab is in the background. */
+  suspend(): void {
+    if (this.ctx?.state === 'running') void this.ctx.suspend();
+  }
+
   setMuted(m: boolean): void {
     this._muted = m;
-    if (this.master && this.ctx) this.master.gain.setTargetAtTime(m ? 0 : 0.5, this.ctx.currentTime, 0.02);
+    if (this.master && this.ctx) this.master.gain.setTargetAtTime(m ? 0 : SFX_VOLUME, this.ctx.currentTime, 0.02);
+  }
+
+  setMusicMuted(m: boolean): void {
+    this.musicMuted = m;
+    if (!this.musicBus || !this.ctx || !this.music) return;
+    this.musicBus.gain.setTargetAtTime(m ? 0 : MUSIC_VOLUME, this.ctx.currentTime, 0.05);
+    // Stop scheduling notes while muted; restart cleanly on unmute.
+    if (m) this.music.stop();
+    else this.music.start();
+  }
+
+  setMusicMode(mode: MusicMode): void {
+    this.musicMode = mode;
+    this.music?.setMode(mode);
+  }
+
+  setMusicIntensity(v: number): void {
+    this.music?.setIntensity(v);
   }
 
   private tone(type: OscillatorType, f0: number, f1: number, dur: number, vol: number, delay = 0): void {

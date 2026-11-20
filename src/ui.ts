@@ -20,20 +20,33 @@ export class UI {
     private save: SaveData,
   ) {
     $('.title-shapes').innerHTML = SHAPE_ORDER.map((s) => shapeSvg(s, 30)).join('');
-    this.sfx.setMuted(save.muted);
-    this.updateMuteButton();
+    this.sfx.setMuted(save.sfxMuted);
+    this.sfx.setMusicMuted(save.musicMuted);
+    this.updateMuteButtons();
+
+    // Browsers only allow audio after a user gesture: start it on the first touch or click anywhere.
+    document.addEventListener('pointerdown', () => this.sfx.unlock(), { once: true });
+    document.addEventListener('keydown', () => this.sfx.unlock(), { once: true });
 
     document.addEventListener('click', (e) => {
       const btn = (e.target as HTMLElement).closest<HTMLElement>('[data-action]');
       if (btn) this.action(btn.dataset.action!, btn);
     });
     $('#btn-pause').addEventListener('click', () => this.pause());
-    $('#btn-mute').addEventListener('click', () => {
+    $('#btn-music').addEventListener('click', () => {
+      this.save.musicMuted = !this.save.musicMuted;
+      this.sfx.setMusicMuted(this.save.musicMuted);
       this.sfx.unlock();
-      this.save.muted = !this.save.muted;
-      this.sfx.setMuted(this.save.muted);
       writeSave(this.save);
-      this.updateMuteButton();
+      this.updateMuteButtons();
+    });
+    $('#btn-sfx').addEventListener('click', () => {
+      this.save.sfxMuted = !this.save.sfxMuted;
+      this.sfx.setMuted(this.save.sfxMuted);
+      this.sfx.unlock();
+      this.sfx.click();
+      writeSave(this.save);
+      this.updateMuteButtons();
     });
     window.addEventListener('keydown', (e) => {
       if (e.key === 'Escape' || e.key === 'p') {
@@ -42,7 +55,12 @@ export class UI {
       }
     });
     document.addEventListener('visibilitychange', () => {
-      if (document.hidden && this.game.isPlaying) this.pause();
+      if (document.hidden) {
+        if (this.game.isPlaying) this.pause();
+        this.sfx.suspend();
+      } else {
+        this.sfx.unlock();
+      }
     });
 
     game.onHud = (h) => this.updateHud(h);
@@ -51,12 +69,21 @@ export class UI {
     game.onGameOver = (r) => this.gameOver(r);
   }
 
-  private updateMuteButton(): void {
-    $('#btn-mute').classList.toggle('muted', this.save.muted);
+  private updateMuteButtons(): void {
+    const music = $('#btn-music');
+    const sfx = $('#btn-sfx');
+    music.classList.toggle('muted', this.save.musicMuted);
+    sfx.classList.toggle('muted', this.save.sfxMuted);
+    music.setAttribute('aria-pressed', String(!this.save.musicMuted));
+    sfx.setAttribute('aria-pressed', String(!this.save.sfxMuted));
+    music.title = this.save.musicMuted ? 'Music off' : 'Music on';
+    sfx.title = this.save.sfxMuted ? 'Sound effects off' : 'Sound effects on';
   }
 
   private show(id: ScreenId | null): void {
     this.current = id;
+    // Fuller music during play, calmer in menus, muffled while paused.
+    this.sfx.setMusicMode(id === null ? 'game' : id === 'pause' ? 'paused' : 'menu');
     document.querySelectorAll<HTMLElement>('.screen').forEach((el) => el.classList.toggle('hidden', el.id !== `screen-${id}`));
     $('#hud').classList.toggle('hidden', id !== null && id !== 'pause');
   }
@@ -173,6 +200,8 @@ export class UI {
     if (h.wave !== c.wave || h.level !== c.level) {
       c.wave = h.wave;
       c.level = h.level;
+      // The groove builds up over the waves; later levels start hotter.
+      this.sfx.setMusicIntensity(((h.wave - 1) / (WAVES_PER_LEVEL - 1)) * 0.75 + ((h.level - 1) / (LEVEL_COUNT - 1)) * 0.35);
       $('.hud-wave').textContent = `Wave ${h.wave}/${WAVES_PER_LEVEL}`;
       $('.hud-level').textContent = `Level ${h.level}`;
     }

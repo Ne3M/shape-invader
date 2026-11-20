@@ -154,16 +154,36 @@ body {
   border-color: var(--accent);
 }
 
-#btn-mute {
+.audio-btns {
   position: fixed;
   z-index: 30;
   right: max(12px, env(safe-area-inset-right));
   bottom: max(12px, env(safe-area-inset-bottom));
+  display: flex;
+  gap: 8px;
 }
 
-#btn-mute.muted {
+.audio-btns .icon-btn {
+  position: relative;
+  display: grid;
+  place-items: center;
+  color: var(--accent);
+}
+
+.audio-btns .icon-btn.muted {
   color: var(--muted);
-  text-decoration: line-through;
+  opacity: 0.6;
+}
+
+/* Diagonal slash over a muted button. */
+.audio-btns .icon-btn.muted::after {
+  content: '';
+  position: absolute;
+  width: 26px;
+  height: 2px;
+  background: var(--danger);
+  transform: rotate(-45deg);
+  border-radius: 1px;
 }
 
 /* ------------------------------------------------------------ Banner */
