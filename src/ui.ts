@@ -1,17 +1,20 @@
 import type { Sfx } from './audio';
 import type { Game, HudState, LevelResult } from './game';
-import { LEVELS, LEVEL_COUNT, WAVES_PER_LEVEL } from './levels';
+import { LEVELS, LEVEL_COUNT, WAVES_PER_LEVEL, endlessShapes } from './levels';
 import { SHAPE_ORDER, SHAPES, demoStroke, shapeSvg } from './shapes';
 import { writeSave, type SaveData } from './storage';
 
 type ScreenId = 'title' | 'levels' | 'intro' | 'pause' | 'complete' | 'over';
+
+/** `selected` value meaning endless mode instead of a level index. */
+const ENDLESS = -1;
 
 const $ = <T extends HTMLElement = HTMLElement>(sel: string, root: ParentNode = document) => root.querySelector(sel) as T;
 
 export class UI {
   private current: ScreenId | null = 'title';
   private selected = 0;
-  private hudCache = { shield: -1, score: -1, multiplier: -1, wave: -1, level: -1 };
+  private hudCache = { shield: -1, score: -1, multiplier: -1, wave: -1, level: -1, shapes: '' };
   private bannerTimer = 0;
 
   constructor(
@@ -106,6 +109,9 @@ export class UI {
       case 'level':
         this.showIntro(Number(el.dataset.level));
         break;
+      case 'endless':
+        this.showIntro(ENDLESS);
+        break;
       case 'start':
         this.startLevel(this.selected);
         break;
@@ -134,11 +140,32 @@ export class UI {
         <div class="level-best">${this.save.best[lv.index] ? `Best ${this.save.best[lv.index].toLocaleString()}` : '&nbsp;'}</div>
       </button>`;
     }).join('');
+    const { endlessBestWave: bw, endlessBestScore: bs } = this.save;
+    $('.endless-slot').innerHTML = `<button class="level-card endless-card" data-action="endless">
+        <div class="endless-mark">∞</div>
+        <div class="endless-text">
+          <div class="endless-title">Endless</div>
+          <div class="level-name">As many waves as you can survive</div>
+        </div>
+        <div class="level-best">${bw ? `Best: wave ${bw} · ${bs.toLocaleString()}` : 'No record yet'}</div>
+      </button>`;
     this.show('levels');
   }
 
   private showIntro(index: number): void {
     this.selected = index;
+    if (index === ENDLESS) {
+      $('.intro-kicker').textContent = 'Endless mode';
+      $('.intro-name').textContent = 'Endless';
+      $('.intro-new').innerHTML = '';
+      $('.intro-twist').textContent =
+        'No final wave. Every wave brings more asteroids and more speed, and a new shape joins every 3 waves. How far can you go?';
+      $('.intro-pool').innerHTML =
+        endlessShapes(0).map((sh) => shapeSvg(sh, 30)).join('') +
+        (this.save.endlessBestWave ? `<div class="intro-record">Your best: wave ${this.save.endlessBestWave}</div>` : '');
+      this.show('intro');
+      return;
+    }
     const lv = LEVELS[index];
     $('.intro-kicker').textContent = `Level ${index + 1} of ${LEVEL_COUNT}`;
     $('.intro-name').textContent = lv.name;
@@ -156,10 +183,10 @@ export class UI {
 
   private startLevel(index: number): void {
     this.selected = index;
-    $('.hud-legend').innerHTML = LEVELS[index].shapes.map((s) => shapeSvg(s, 26)).join('');
-    this.hudCache = { shield: -1, score: -1, multiplier: -1, wave: -1, level: -1 };
+    this.hudCache = { shield: -1, score: -1, multiplier: -1, wave: -1, level: -1, shapes: '' };
     this.show(null);
-    this.game.startLevel(index);
+    if (index === ENDLESS) this.game.startEndless();
+    else this.game.startLevel(index);
   }
 
   pause(): void {
@@ -200,10 +227,23 @@ export class UI {
     if (h.wave !== c.wave || h.level !== c.level) {
       c.wave = h.wave;
       c.level = h.level;
-      // The groove builds up over the waves; later levels start hotter.
-      this.sfx.setMusicIntensity(((h.wave - 1) / (WAVES_PER_LEVEL - 1)) * 0.75 + ((h.level - 1) / (LEVEL_COUNT - 1)) * 0.35);
-      $('.hud-wave').textContent = `Wave ${h.wave}/${WAVES_PER_LEVEL}`;
-      $('.hud-level').textContent = `Level ${h.level}`;
+      if (h.endless) {
+        // Endless: the groove reaches full intensity around wave 20.
+        this.sfx.setMusicIntensity(Math.min(1, (h.wave - 1) / 20));
+        $('.hud-wave').textContent = `Wave ${h.wave}`;
+        $('.hud-level').textContent = 'Endless';
+      } else {
+        // The groove builds up over the waves; later levels start hotter.
+        this.sfx.setMusicIntensity(((h.wave - 1) / (WAVES_PER_LEVEL - 1)) * 0.75 + ((h.level - 1) / (LEVEL_COUNT - 1)) * 0.35);
+        $('.hud-wave').textContent = `Wave ${h.wave}/${WAVES_PER_LEVEL}`;
+        $('.hud-level').textContent = `Level ${h.level}`;
+      }
+    }
+    // Shapes in play (grows during an endless run).
+    const key = h.shapes.join(',');
+    if (key !== c.shapes) {
+      c.shapes = key;
+      $('.hud-legend').innerHTML = h.shapes.map((s) => shapeSvg(s, 26)).join('');
     }
   }
 
@@ -247,6 +287,25 @@ export class UI {
   }
 
   private gameOver(r: LevelResult): void {
+    if (r.endless) {
+      const newWave = r.wave > this.save.endlessBestWave;
+      const newScore = r.score > this.save.endlessBestScore;
+      this.save.endlessBestWave = Math.max(this.save.endlessBestWave, r.wave);
+      this.save.endlessBestScore = Math.max(this.save.endlessBestScore, r.score);
+      writeSave(this.save);
+      $('.over-kicker').textContent = 'Endless mode';
+      $('.over-stats').innerHTML =
+        this.stats([
+          ['Reached', `Wave ${r.wave}`],
+          ['Score', r.score.toLocaleString()],
+          ['Best wave', String(this.save.endlessBestWave)],
+          ['Best score', this.save.endlessBestScore.toLocaleString()],
+          ['Asteroids', String(r.kills)],
+          ['Best combo', `×${r.bestMultiplier}`],
+        ]) + (newWave || newScore ? `<div class="new-best">${newWave ? 'New best wave!' : 'New best score!'}</div>` : '');
+      this.show('over');
+      return;
+    }
     const i = r.level;
     this.save.best[i] = Math.max(this.save.best[i], r.score);
     writeSave(this.save);

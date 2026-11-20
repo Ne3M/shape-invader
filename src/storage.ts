@@ -7,6 +7,9 @@ export interface SaveData {
   stars: number[];
   sfxMuted: boolean;
   musicMuted: boolean;
+  /** Endless mode records. */
+  endlessBestWave: number;
+  endlessBestScore: number;
 }
 
 // Key kept from the game's former name so existing progress is not lost.
@@ -16,7 +19,7 @@ const KEY = 'shape-defense-v1';
 const START_UNLOCKED = 2;
 
 function fresh(): SaveData {
-  return { unlocked: START_UNLOCKED, best: Array(LEVEL_COUNT).fill(0), stars: Array(LEVEL_COUNT).fill(0), sfxMuted: false, musicMuted: false };
+  return { unlocked: START_UNLOCKED, best: Array(LEVEL_COUNT).fill(0), stars: Array(LEVEL_COUNT).fill(0), sfxMuted: false, musicMuted: false, endlessBestWave: 0, endlessBestScore: 0 };
 }
 
 export function loadSave(): SaveData {

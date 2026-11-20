@@ -1,5 +1,5 @@
 import type { Sfx } from './audio';
-import { LEVELS, WAVES_PER_LEVEL, makeWave, pickWeighted, type WaveDef } from './levels';
+import { LEVELS, WAVES_PER_LEVEL, endlessNewShape, endlessShapes, makeEndlessWave, makeWave, pickWeighted, type WaveDef } from './levels';
 import { MIN_STROKE_SIZE, recognize } from './recognizer';
 import { SHAPE_ORDER, SHAPES, traceGlyph, type Pt, type ShapeId } from './shapes';
 
@@ -103,10 +103,13 @@ export interface HudState {
   wave: number;
   level: number;
   shapes: ShapeId[];
+  endless: boolean;
 }
 
 export interface LevelResult {
+  /** Level index, or -1 in endless mode. */
   level: number;
+  endless: boolean;
   score: number;
   hits: number;
   kills: number;
@@ -163,6 +166,8 @@ export class Game {
 
   // Run state.
   private levelIndex = 0;
+  /** Endless mode: waves never stop; the run ends when the shield is gone. */
+  private endless = false;
   private waveIndex = 0;
   private wave: WaveDef | null = null;
   private toSpawn = 0;
@@ -206,7 +211,19 @@ export class Game {
   // ---------------------------------------------------------------- lifecycle
 
   startLevel(index: number): void {
+    this.endless = false;
     this.levelIndex = index;
+    this.startRun();
+  }
+
+  /** Endless mode: as many waves as the player can survive. */
+  startEndless(): void {
+    this.endless = true;
+    this.levelIndex = -1;
+    this.startRun();
+  }
+
+  private startRun(): void {
     this.waveIndex = 0;
     this.asteroids = [];
     this.blasts = [];
@@ -315,28 +332,44 @@ export class Game {
     }
   }
 
-  private waveTitle(index: number): string {
-    return index === WAVES_PER_LEVEL - 1 ? 'Final wave' : `Wave ${index + 1}`;
+  private isLastWave(index: number): boolean {
+    return !this.endless && index === WAVES_PER_LEVEL - 1;
   }
 
-  /** Starts the current wave. The level's first wave gets a longer lead-in and its own banner;
+  private waveTitle(index: number): string {
+    return this.isLastWave(index) ? 'Final wave' : `Wave ${index + 1}`;
+  }
+
+  /** Banner subtitle for a wave: progress in a level; in endless mode, any newly added shape. */
+  private waveSubtitle(index: number): string {
+    if (!this.endless) return `${index + 1} / ${WAVES_PER_LEVEL}`;
+    const fresh = endlessNewShape(index);
+    return fresh ? `New shape: ${SHAPES[fresh].name}` : 'Endless';
+  }
+
+  private currentShapes(): ShapeId[] {
+    return this.endless ? endlessShapes(this.waveIndex) : LEVELS[this.levelIndex].shapes;
+  }
+
+  /** Starts the current wave. The first wave gets a longer lead-in and its own banner;
    *  later waves were already announced when the previous one was cleared. */
   private beginWave(): void {
-    this.wave = makeWave(this.levelIndex, this.waveIndex);
+    this.wave = this.endless ? makeEndlessWave(this.waveIndex) : makeWave(this.levelIndex, this.waveIndex);
     this.toSpawn = this.wave.count;
     this.breakTimer = 0;
     if (this.waveIndex === 0) {
       this.spawnTimer = 1.4;
-      this.onBanner?.(this.waveTitle(0), `1 / ${WAVES_PER_LEVEL}`);
+      this.onBanner?.(this.waveTitle(0), this.waveSubtitle(0));
     } else {
       this.spawnTimer = WAVE_LEAD_IN;
     }
   }
 
   private result(): LevelResult {
-    const stars = this.state === 'over' ? 0 : this.hits <= 1 ? 3 : this.hits <= 4 ? 2 : 1;
+    const stars = this.state === 'over' || this.endless ? 0 : this.hits <= 1 ? 3 : this.hits <= 4 ? 2 : 1;
     return {
       level: this.levelIndex,
+      endless: this.endless,
       score: this.score,
       hits: this.hits,
       kills: this.kills,
@@ -646,7 +679,7 @@ export class Game {
 
     // Wave cleared?
     if (!this.dying && this.endTimer <= 0 && this.breakTimer <= 0 && this.toSpawn === 0 && this.asteroids.length === 0 && this.blasts.length === 0) {
-      if (this.waveIndex >= WAVES_PER_LEVEL - 1) {
+      if (this.isLastWave(this.waveIndex)) {
         this.endTimer = 1.4;
         this.sfx.levelComplete();
         this.onBanner?.('Level clear!', LEVELS[this.levelIndex].name);
@@ -655,7 +688,8 @@ export class Game {
         this.breakTimer = WAVE_BREAK;
         this.sfx.waveClear();
         const next = this.waveIndex + 1;
-        this.onBanner?.(this.waveTitle(next), `Wave ${next} clear · ${next + 1} / ${WAVES_PER_LEVEL}`);
+        const progress = this.endless ? this.waveSubtitle(next) : `${next + 1} / ${WAVES_PER_LEVEL}`;
+        this.onBanner?.(this.waveTitle(next), `Wave ${next} clear · ${progress}`);
       }
     }
 
@@ -665,7 +699,9 @@ export class Game {
       multiplier: this.multiplier,
       wave: this.waveIndex + 1,
       level: this.levelIndex + 1,
-      shapes: LEVELS[this.levelIndex].shapes,
+      // Endless: show the next wave's shapes during the break, so a new one appears with its banner.
+      shapes: this.endless && this.breakTimer > 0 ? endlessShapes(this.waveIndex + 1) : this.currentShapes(),
+      endless: this.endless,
     });
   }
 

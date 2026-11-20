@@ -24,6 +24,12 @@ describe('save data', () => {
     expect(loadSave().unlocked).toBe(6);
   });
 
+  it('starts with no endless record and keeps saved ones', () => {
+    expect(loadSave().endlessBestWave).toBe(0);
+    store.set('shape-defense-v1', JSON.stringify({ unlocked: 2, endlessBestWave: 14, endlessBestScore: 52000 }));
+    expect(loadSave()).toMatchObject({ endlessBestWave: 14, endlessBestScore: 52000 });
+  });
+
   it('migrates the old single mute switch', () => {
     store.set('shape-defense-v1', JSON.stringify({ unlocked: 3, muted: true }));
     const d = loadSave();

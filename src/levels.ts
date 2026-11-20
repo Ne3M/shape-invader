@@ -81,6 +81,49 @@ export function makeWave(levelIndex: number, waveIndex: number, rand: () => numb
   return { count, travelTime, spawnInterval, burstChance, burstMax, shapes, weights };
 }
 
+// ------------------------------------------------------------ Endless mode
+
+const ENDLESS_START_SHAPES = 3;
+/** A new shape type joins the endless pool every this many waves, until all are in. */
+const ENDLESS_SHAPE_EVERY = 3;
+
+/** Shape types in play at endless wave `w` (0-based): circle, triangle, square, then one more every 3 waves. */
+export function endlessShapes(w: number): ShapeId[] {
+  return SHAPE_ORDER.slice(0, Math.min(SHAPE_ORDER.length, ENDLESS_START_SHAPES + Math.floor(w / ENDLESS_SHAPE_EVERY)));
+}
+
+/** The shape that joins the pool at endless wave `w`, if any. */
+export function endlessNewShape(w: number): ShapeId | undefined {
+  if (w === 0 || w % ENDLESS_SHAPE_EVERY !== 0) return undefined;
+  const n = endlessShapes(w).length;
+  return n > endlessShapes(w - 1).length ? SHAPE_ORDER[n - 1] : undefined;
+}
+
+/**
+ * Endless wave `w` (0-based). Starts about like level 3 and keeps growing with no end:
+ * more asteroids per wave, faster, denser, with bigger bursts and more shape types at once.
+ * Speed and spawn rate reach their limits around wave 27; asteroid count keeps rising to wave ~35.
+ */
+export function makeEndlessWave(w: number, rand: () => number = Math.random): WaveDef {
+  const count = Math.min(48, Math.round((5 + 1.1 * w) * WAVE_LENGTH));
+  const travelTime = Math.max(2.6, 8 - 0.2 * w);
+  const spawnInterval = Math.max(0.28, 1.4 - 0.04 * w);
+  const burstChance = Math.min(0.55, 0.02 * w);
+  const burstMax = Math.min(5, 2 + Math.floor(w / 6));
+
+  const pool = endlessShapes(w);
+  const fresh = endlessNewShape(w);
+  const distinct = Math.min(pool.length, 2 + Math.floor(w / 4));
+  const chosen = new Set<ShapeId>();
+  if (fresh) chosen.add(fresh);
+  const rest = pool.filter((s) => !chosen.has(s)).sort(() => rand() - 0.5);
+  while (chosen.size < distinct && rest.length) chosen.add(rest.pop()!);
+  const shapes = [...chosen];
+  const weights = shapes.map((s) => (s === fresh ? 1.8 : 1));
+
+  return { count, travelTime, spawnInterval, burstChance, burstMax, shapes, weights };
+}
+
 export function pickWeighted<T>(items: T[], weights: number[], rand: () => number = Math.random): T {
   const total = weights.reduce((a, b) => a + b, 0);
   let r = rand() * total;
