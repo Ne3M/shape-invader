@@ -193,7 +193,12 @@ export class Game {
     this.ctx = canvas.getContext('2d')!;
     for (let i = 0; i < 170; i++) this.stars.push({ x: Math.random(), y: Math.random(), z: Math.random(), tw: Math.random() * 6 });
     this.resize();
+    // The canvas's on-screen size can change without a usable window 'resize' event (phone
+    // rotation, address bar showing/hiding, entering PWA full screen...). If the game kept stale
+    // dimensions, the browser would stretch the old image and the ink would land far from the finger.
+    // So watch the canvas itself, and also re-check every frame (see frame()).
     window.addEventListener('resize', () => this.resize());
+    if ('ResizeObserver' in window) new ResizeObserver(() => this.resize()).observe(canvas);
     this.bindInput();
     requestAnimationFrame((t) => this.frame(t));
   }
@@ -345,9 +350,14 @@ export class Game {
 
   private bindInput(): void {
     const c = this.canvas;
+    // Map from the canvas's displayed size to the game's coordinates, so the ink stays under the
+    // finger even during the frame before a size change has been picked up.
     const pos = (e: PointerEvent): Pt => {
       const r = c.getBoundingClientRect();
-      return { x: e.clientX - r.left, y: e.clientY - r.top };
+      return {
+        x: ((e.clientX - r.left) * this.w) / (r.width || this.w),
+        y: ((e.clientY - r.top) * this.h) / (r.height || this.h),
+      };
     };
     c.addEventListener('pointerdown', (e) => {
       if ((this.state !== 'playing' && this.state !== 'sandbox') || this.dying || this.stroke) return;
@@ -770,6 +780,11 @@ export class Game {
   private frame(t: number): void {
     const dt = this.last ? Math.min(0.05, (t - this.last) / 1000) : 0.016;
     this.last = t;
+    // Safety net for size or pixel-density changes no event told us about.
+    const dpr = Math.min(2, window.devicePixelRatio || 1);
+    const cw = this.canvas.clientWidth;
+    const ch = this.canvas.clientHeight;
+    if (cw > 0 && ch > 0 && (cw !== this.w || ch !== this.h || dpr !== this.dpr)) this.resize();
     this.update(dt);
     this.render();
     requestAnimationFrame((tt) => this.frame(tt));
@@ -841,7 +856,12 @@ export class Game {
       c.fillRect(p.x - p.size / 2, p.y - p.size / 2, p.size, p.size);
     }
     c.globalAlpha = 1;
+
+    // The player's ink is drawn without screen shake, so it never drifts from the finger.
+    c.save();
+    c.setTransform(this.dpr, 0, 0, this.dpr, 0, 0);
     this.renderStrokes();
+    c.restore();
 
     c.globalCompositeOperation = 'source-over';
     c.textAlign = 'center';
