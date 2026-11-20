@@ -401,7 +401,7 @@ export class Game {
     this.burst(a.x, a.y, color, 22, a.r * 4);
     this.burst(a.x, a.y, '#ffffff', 6, a.r * 3);
     if (!attract) {
-      this.sfx.explode(order);
+      this.sfx.explode(a.shape, order);
       const pts = a.points;
       if (pts) this.floater(a.x, a.y, `+${pts}`, color, 15);
     }
