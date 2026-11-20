@@ -1,0 +1,104 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
+    <meta name="theme-color" content="#03040c" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <title>Shape Invaders</title>
+  </head>
+  <body>
+    <canvas id="game"></canvas>
+
+    <div id="hud" class="hidden">
+      <div class="hud-top">
+        <div class="hud-left">
+          <div class="shield" title="Shield"><div class="shield-fill"></div></div>
+          <div class="hud-level"></div>
+        </div>
+        <div class="hud-wave"></div>
+        <div class="hud-right">
+          <div class="hud-score">0</div>
+          <div class="hud-combo">×1</div>
+        </div>
+        <button class="icon-btn" id="btn-pause" aria-label="Pause">❚❚</button>
+      </div>
+      <div class="hud-legend"></div>
+    </div>
+
+    <div id="banner" class="banner"><div class="banner-title"></div><div class="banner-sub"></div></div>
+
+    <button class="icon-btn" id="btn-mute" aria-label="Toggle sound">♪</button>
+
+    <section id="screen-title" class="screen">
+      <div class="panel title-panel">
+        <h1 class="logo">Shape<span>Invaders</span></h1>
+        <p class="tagline">Draw the shape. Destroy the swarm.</p>
+        <div class="title-shapes"></div>
+        <button class="btn primary" data-action="play">Play</button>
+        <p class="small">Draw with your finger or mouse. Each shape you draw blasts every asteroid of that shape on screen.</p>
+      </div>
+    </section>
+
+    <section id="screen-levels" class="screen hidden">
+      <div class="panel wide">
+        <h2>Select level</h2>
+        <div class="level-grid"></div>
+        <button class="btn" data-action="title">Back</button>
+      </div>
+    </section>
+
+    <section id="screen-intro" class="screen hidden">
+      <div class="panel">
+        <div class="kicker intro-kicker"></div>
+        <h2 class="intro-name"></h2>
+        <div class="intro-new"></div>
+        <div class="intro-twist"></div>
+        <div class="intro-pool"></div>
+        <div class="row">
+          <button class="btn" data-action="levels">Back</button>
+          <button class="btn primary" data-action="start">Start</button>
+        </div>
+      </div>
+    </section>
+
+    <section id="screen-pause" class="screen hidden">
+      <div class="panel">
+        <h2>Paused</h2>
+        <div class="col">
+          <button class="btn primary" data-action="resume">Resume</button>
+          <button class="btn" data-action="restart">Restart level</button>
+          <button class="btn" data-action="levels">Level select</button>
+        </div>
+      </div>
+    </section>
+
+    <section id="screen-complete" class="screen hidden">
+      <div class="panel">
+        <div class="kicker complete-kicker"></div>
+        <h2 class="complete-title">Level clear!</h2>
+        <div class="stars"></div>
+        <div class="stats complete-stats"></div>
+        <div class="col">
+          <button class="btn primary" data-action="next">Next level</button>
+          <button class="btn" data-action="restart">Replay</button>
+          <button class="btn" data-action="levels">Level select</button>
+        </div>
+      </div>
+    </section>
+
+    <section id="screen-over" class="screen hidden">
+      <div class="panel">
+        <div class="kicker over-kicker"></div>
+        <h2 class="danger">Shield down</h2>
+        <div class="stats over-stats"></div>
+        <div class="col">
+          <button class="btn primary" data-action="restart">Retry</button>
+          <button class="btn" data-action="levels">Level select</button>
+        </div>
+      </div>
+    </section>
+
+    <script type="module" src="/src/main.ts"></script>
+  </body>
+</html>
