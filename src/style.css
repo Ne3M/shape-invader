@@ -295,6 +295,26 @@ body {
   margin-bottom: 22px;
 }
 
+.install {
+  margin-top: 12px;
+}
+
+.install-hint {
+  color: var(--muted);
+  font-size: 13px;
+  line-height: 1.5;
+  margin: 0;
+}
+
+.install-hint strong {
+  color: var(--text);
+}
+
+.install-hint svg {
+  vertical-align: -3px;
+  color: var(--accent);
+}
+
 h2 {
   margin: 4px 0 16px;
   font-size: 26px;
