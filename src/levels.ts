@@ -2,6 +2,7 @@ import { SHAPE_ORDER, type ShapeId } from './shapes';
 
 export const LEVEL_COUNT = 10;
 export const WAVES_PER_LEVEL = 10;
+const WAVE_LENGTH = 1.24;
 
 export interface LevelDef {
   index: number;
@@ -54,7 +55,9 @@ export function makeWave(levelIndex: number, waveIndex: number, rand: () => numb
   // tutorial and speeds up much more steeply from wave to wave than the other levels.
   const ramp = levelIndex === 0 ? 1 : 0;
 
-  const count = 4 + Math.floor(w * 0.9) + Math.floor(L * 0.8);
+  // WAVE_LENGTH scales how many asteroids each wave sends (and so how long a level lasts),
+  // without changing their speed or spawn rate.
+  const count = Math.round((4 + Math.floor(w * 0.9) + Math.floor(L * 0.8)) * WAVE_LENGTH);
   const travelTime = Math.max(3, 8.5 - 0.35 * L - (0.13 + 0.42 * ramp) * w);
   const spawnInterval = Math.max(0.3, 1.6 - 0.07 * L - (0.06 + 0.05 * ramp) * w);
   const burstChance = Math.min(0.5, 0.03 * L + (0.015 + 0.015 * ramp) * w);

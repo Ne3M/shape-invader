@@ -109,6 +109,9 @@ const HIT_DAMAGE = 22;
 const REGEN_DELAY = 2;
 const REGEN_RATE = 5;
 const BLAST_DUR = 0.45;
+/** Pause after a wave is cleared, then delay before the next wave's first asteroid. */
+const WAVE_BREAK = 0.8;
+const WAVE_LEAD_IN = 0.6;
 
 const rand = (a: number, b: number) => a + Math.random() * (b - a);
 const clamp = (v: number, a: number, b: number) => Math.max(a, Math.min(b, v));
@@ -232,13 +235,22 @@ export class Game {
     return this.state === 'playing';
   }
 
+  private waveTitle(index: number): string {
+    return index === WAVES_PER_LEVEL - 1 ? 'Final wave' : `Wave ${index + 1}`;
+  }
+
+  /** Starts the current wave. The level's first wave gets a longer lead-in and its own banner;
+   *  later waves were already announced when the previous one was cleared. */
   private beginWave(): void {
     this.wave = makeWave(this.levelIndex, this.waveIndex);
     this.toSpawn = this.wave.count;
-    this.spawnTimer = 1.4;
     this.breakTimer = 0;
-    const last = this.waveIndex === WAVES_PER_LEVEL - 1;
-    this.onBanner?.(last ? 'Final wave' : `Wave ${this.waveIndex + 1}`, `${this.waveIndex + 1} / ${WAVES_PER_LEVEL}`);
+    if (this.waveIndex === 0) {
+      this.spawnTimer = 1.4;
+      this.onBanner?.(this.waveTitle(0), `1 / ${WAVES_PER_LEVEL}`);
+    } else {
+      this.spawnTimer = WAVE_LEAD_IN;
+    }
   }
 
   private result(): LevelResult {
@@ -450,13 +462,20 @@ export class Game {
 
   private spawn(shape: ShapeId, angle: number, travelTime: number, extraDist = 0): void {
     const r = this.astR * rand(0.9, 1.1);
-    const dist = this.halfDiag + r + 16 + extraDist;
+    // Speed is set from the corner distance, so difficulty doesn't depend on the arrival side.
+    const speed = ((this.halfDiag + r + 16) / travelTime) * rand(0.9, 1.1);
+    // Spawn just past the screen edge in that direction (not on the corner circle), so no time
+    // is spent travelling unseen; ~0.5 s of margin lets the edge indicator warn the player.
+    const c = Math.abs(Math.cos(angle)) || 1e-6;
+    const s = Math.abs(Math.sin(angle)) || 1e-6;
+    const toEdge = Math.min(this.w / 2 / c, this.h / 2 / s);
+    const dist = toEdge + r + Math.max(24, speed * 0.5) + extraDist;
     const rock = Array.from({ length: 9 }, () => rand(0.82, 1.08));
     this.asteroids.push({
       shape,
       x: this.cx + Math.cos(angle) * dist,
       y: this.cy + Math.sin(angle) * dist,
-      speed: ((this.halfDiag + r + 16) / travelTime) * rand(0.9, 1.1),
+      speed,
       r,
       rot: rand(0, Math.PI * 2),
       spin: rand(-0.8, 0.8),
@@ -531,9 +550,11 @@ export class Game {
         this.sfx.levelComplete();
         this.onBanner?.('Level clear!', LEVELS[this.levelIndex].name);
       } else {
-        this.breakTimer = 2.2;
+        // Short breather: one banner announces the next wave and stays up while it starts.
+        this.breakTimer = WAVE_BREAK;
         this.sfx.waveClear();
-        this.onBanner?.(`Wave ${this.waveIndex + 1} clear`, '');
+        const next = this.waveIndex + 1;
+        this.onBanner?.(this.waveTitle(next), `Wave ${next} clear · ${next + 1} / ${WAVES_PER_LEVEL}`);
       }
     }
 
