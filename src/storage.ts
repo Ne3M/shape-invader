@@ -1,7 +1,7 @@
 import { LEVEL_COUNT } from './levels';
 
 export interface SaveData {
-  /** Number of levels unlocked (at least 1). */
+  /** Number of levels unlocked (at least 2). */
   unlocked: number;
   best: number[];
   stars: number[];
@@ -12,8 +12,11 @@ export interface SaveData {
 // Key kept from the game's former name so existing progress is not lost.
 const KEY = 'shape-defense-v1';
 
+/** Levels open from the start: level 1 is a tutorial, level 2 is for players who want to skip it. */
+const START_UNLOCKED = 2;
+
 function fresh(): SaveData {
-  return { unlocked: 1, best: Array(LEVEL_COUNT).fill(0), stars: Array(LEVEL_COUNT).fill(0), sfxMuted: false, musicMuted: false };
+  return { unlocked: START_UNLOCKED, best: Array(LEVEL_COUNT).fill(0), stars: Array(LEVEL_COUNT).fill(0), sfxMuted: false, musicMuted: false };
 }
 
 export function loadSave(): SaveData {
@@ -28,7 +31,7 @@ export function loadSave(): SaveData {
       d.musicMuted = parsed.musicMuted ?? parsed.muted;
       delete d.muted;
     }
-    d.unlocked = Math.max(1, Math.min(LEVEL_COUNT, d.unlocked | 0));
+    d.unlocked = Math.max(START_UNLOCKED, Math.min(LEVEL_COUNT, d.unlocked | 0));
     return d;
   } catch {
     return fresh();

@@ -16,7 +16,7 @@ const NAMES = [
   'First Contact',
   'Sharp Turns',
   'Four Corners',
-  'Starfall',
+  'Endless Loop',
   'Straight Shot',
   'Point Break',
   'Making Waves',
@@ -50,10 +50,14 @@ export function makeWave(levelIndex: number, waveIndex: number, rand: () => numb
   const L = levelIndex + (levelIndex >= 8 ? levelIndex - 7 : 0);
   const w = waveIndex;
 
+  // Level 1 has a single shape, so its challenge comes from pace: it starts as a gentle
+  // tutorial and speeds up much more steeply from wave to wave than the other levels.
+  const ramp = levelIndex === 0 ? 1 : 0;
+
   const count = 4 + Math.floor(w * 0.9) + Math.floor(L * 0.8);
-  const travelTime = Math.max(3, 8.5 - 0.35 * L - 0.13 * w);
-  const spawnInterval = Math.max(0.3, 1.6 - 0.07 * L - 0.06 * w);
-  const burstChance = Math.min(0.5, 0.03 * L + 0.015 * w);
+  const travelTime = Math.max(3, 8.5 - 0.35 * L - (0.13 + 0.42 * ramp) * w);
+  const spawnInterval = Math.max(0.3, 1.6 - 0.07 * L - (0.06 + 0.05 * ramp) * w);
+  const burstChance = Math.min(0.5, 0.03 * L + (0.015 + 0.015 * ramp) * w);
   const burstMax = 2 + Math.floor(L / 4);
 
   // Which shapes appear in this wave.

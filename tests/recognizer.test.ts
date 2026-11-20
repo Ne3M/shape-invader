@@ -64,16 +64,20 @@ function ideal(shape: ShapeId, r: Rng): Pt[] {
       if (dir < 0) v.reverse();
       return walk([...v, v[0]], closeFrac);
     }
-    case 'star': {
-      const tips = Array.from({ length: 5 }, (_, i) => {
-        const a = (i / 5) * Math.PI * 2 + rand(r, -0.1, 0.1);
-        const rr = rand(r, 0.85, 1.15);
-        return { x: Math.cos(a) * rr, y: Math.sin(a) * rr };
+    case 'infinity': {
+      // Lemniscate with random proportions, uneven lobes, any start point (often the crossing).
+      const sx = rand(r, 0.8, 1.2);
+      const sy = rand(r, 1.0, 1.9);
+      const lobe = rand(r, 0.8, 1.2); // relative size of the left lobe
+      const t0 = r() < 0.6 ? Math.PI / 2 : rand(r, 0, Math.PI * 2);
+      const n = 160;
+      return Array.from({ length: Math.round(n * closeFrac) }, (_, i) => {
+        const t = t0 + dir * (i / n) * Math.PI * 2;
+        const d = 1 + Math.sin(t) ** 2;
+        const x = Math.cos(t) / d;
+        const k = x < 0 ? lobe : 1;
+        return { x: x * sx * k, y: ((Math.sin(t) * Math.cos(t)) / d) * sy * k };
       });
-      let order = rotateStart([0, 2, 4, 1, 3], Math.floor(r() * 5));
-      if (dir < 0) order = order.reverse();
-      const v = order.map((i) => tips[i]);
-      return walk([...v, v[0]], closeFrac);
     }
     case 'line':
       return walk([{ x: -1, y: 0 }, { x: 1, y: rand(r, -0.05, 0.05) }]);

@@ -4,8 +4,8 @@ import type { Pt, ShapeId } from './shapes';
  * Single-stroke shape recognizer.
  *
  * The stroke is first classified as closed or open. Closed strokes are told apart by
- * how many sharp corners they have and how much they turn in total (a pentagram turns
- * twice around). Open strokes are told apart by straightness, corner count and corner
+ * how many sharp corners they have and how much they turn in total (an infinity sign's
+ * turning cancels out). Open strokes are told apart by straightness, corner count and corner
  * sharpness (a wave curves smoothly, a zigzag turns abruptly).
  * Everything is rotation, scale and direction independent.
  */
@@ -120,21 +120,22 @@ export function recognize(raw: Pt[]): Recognition {
 
   const L = pathLength(pts);
 
-  // Closedness: find where the second half of the stroke comes closest to the start
-  // (this also trims overshoot past the starting point).
+  // Closedness: find where the end of the stroke comes closest to the start
+  // (this also trims overshoot past the starting point). Only the last third is searched:
+  // an infinity sign drawn from its center passes back through the start halfway through.
   let acc = 0;
   let bestJ = pts.length - 1;
   let bestGap = Infinity;
   for (let j = 1; j < pts.length; j++) {
     acc += dist(pts[j - 1], pts[j]);
-    if (acc < L * 0.5) continue;
+    if (acc < L * 0.65) continue;
     const g = dist(pts[j], pts[0]);
     if (g < bestGap) {
       bestGap = g;
       bestJ = j;
     }
   }
-  // Long strokes (stars) may end a bit further from their start and still count as closed.
+  // Long strokes may end a bit further from their start and still count as closed.
   const closed = L > 2.2 * size && (bestGap < 0.18 * size || (bestGap < 0.3 * size && L > 2.8 * size));
 
   if (closed) {
@@ -148,12 +149,15 @@ export function recognize(raw: Pt[]): Recognition {
     const pos = corners.filter((c) => Math.sign(c.theta) === s).length;
     const neg = corners.length - pos;
 
-    let shape: ShapeId;
-    if (Math.abs(total) > 3 * Math.PI || neg >= 2) shape = 'star';
+    let shape: ShapeId | null;
+    // A figure-8 turns one way then the other: its total turning cancels out.
+    // Circles, triangles and squares all turn a full 360° in one direction.
+    if (Math.abs(total) < Math.PI) shape = 'infinity';
+    else if (neg >= 2) shape = null; // concave scribble
     else if (pos <= 2) shape = 'circle';
     else if (pos === 3) shape = 'triangle';
     else if (pos === 4) shape = 'square';
-    else shape = 'star';
+    else shape = null;
     return { shape, closed: true, corners: corners.length };
   }
 

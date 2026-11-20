@@ -1,6 +1,6 @@
 # Shape Invaders
 
-Browser game: asteroids shaped like circles, triangles, squares, stars, lines, Vs, waves and zigzags fly toward your ship. Draw a shape with your finger or mouse, and the ship sends out a blast that destroys every asteroid of that shape on screen.
+Browser game: asteroids shaped like circles, triangles, squares, infinity signs, lines, Vs, waves and zigzags fly toward your ship. Draw a shape with your finger or mouse, and the ship sends out a blast that destroys every asteroid of that shape on screen.
 
 ## Run
 
