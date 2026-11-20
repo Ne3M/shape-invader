@@ -310,9 +310,48 @@ body {
   color: var(--text);
 }
 
-.install-hint svg {
+.install-hint {
+  margin-top: 6px;
+}
+
+/* iOS install guide */
+#install-sheet {
+  z-index: 25;
+  background: rgba(3, 4, 12, 0.9);
+}
+
+.install-steps {
+  text-align: left;
+  margin: 0;
+  padding-left: 22px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  line-height: 1.45;
+}
+
+.install-steps li::marker {
+  color: var(--accent);
+  font-weight: 800;
+}
+
+.install-steps svg {
   vertical-align: -3px;
   color: var(--accent);
+}
+
+.install-steps small {
+  color: var(--muted);
+}
+
+.install-steps .key {
+  display: inline-block;
+  padding: 0 6px;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  color: var(--accent);
+  font-weight: 800;
+  letter-spacing: 1px;
 }
 
 h2 {

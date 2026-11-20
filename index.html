@@ -60,13 +60,21 @@
         <button class="btn primary" data-action="play">Play</button>
         <div class="install">
           <button class="btn hidden" id="btn-install">Install app</button>
-          <p class="install-hint hidden" id="install-hint">
-            Play full screen: tap <strong>Share</strong>
-            <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3v12M7 8l5-5 5 5M5 12v8h14v-8" /></svg>
-            then <strong>Add to Home Screen</strong>.
-          </p>
+          <p class="install-hint hidden" id="install-hint">Add it to your Home Screen to play full screen, even offline.</p>
         </div>
         <p class="small">Draw with your finger or mouse. Each shape you draw blasts every asteroid of that shape on screen.</p>
+      </div>
+    </section>
+
+    <!-- iPhone / iPad install guide, opened by the Install app button (see src/pwa.ts). -->
+    <section id="install-sheet" class="screen hidden" role="dialog" aria-modal="true" aria-labelledby="install-title">
+      <div class="panel">
+        <h2 class="install-title" id="install-title">Install on iPhone</h2>
+        <ol class="install-steps"></ol>
+        <p class="small install-foot">The game then opens full screen from its icon, even offline.</p>
+        <div class="col">
+          <button class="btn primary install-close">Got it</button>
+        </div>
       </div>
     </section>
 
