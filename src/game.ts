@@ -1,5 +1,16 @@
 import type { Sfx } from './audio';
-import { LEVELS, WAVES_PER_LEVEL, endlessNewShape, endlessShapes, makeEndlessWave, makeWave, pickWeighted, type WaveDef } from './levels';
+import {
+  LEVELS,
+  WAVES_PER_LEVEL,
+  approachSpeed,
+  edgeDistance,
+  endlessNewShape,
+  endlessShapes,
+  makeEndlessWave,
+  makeWave,
+  pickWeighted,
+  type WaveDef,
+} from './levels';
 import { MIN_STROKE_SIZE, recognize } from './recognizer';
 import { SHAPE_ORDER, SHAPES, traceGlyph, type Pt, type ShapeId } from './shapes';
 
@@ -588,14 +599,12 @@ export class Game {
 
   private spawn(shape: ShapeId, angle: number, travelTime: number, extraDist = 0): void {
     const r = this.astR * rand(0.9, 1.1);
-    // Speed is set from the corner distance, so difficulty doesn't depend on the arrival side.
-    const speed = ((this.halfDiag + r + 16) / travelTime) * rand(0.9, 1.1);
-    // Spawn just past the screen edge in that direction (not on the corner circle), so no time
-    // is spent travelling unseen; ~0.5 s of margin lets the edge indicator warn the player.
-    const c = Math.abs(Math.cos(angle)) || 1e-6;
-    const s = Math.abs(Math.sin(angle)) || 1e-6;
-    const toEdge = Math.min(this.w / 2 / c, this.h / 2 / s);
-    const dist = toEdge + r + Math.max(24, speed * 0.5) + extraDist;
+    // Speed matches the distance from this side of the screen to the ship, so every asteroid stays
+    // visible for the same time whatever side it comes from (on a tall phone, the sides are close).
+    const speed = approachSpeed(angle, this.w, this.h, this.shipR + r * 0.6, travelTime) * rand(0.9, 1.1);
+    // Spawn just past the screen edge in that direction, so no time is spent travelling unseen;
+    // ~0.5 s of margin lets the edge indicator warn the player.
+    const dist = edgeDistance(angle, this.w, this.h) + r + Math.max(24, speed * 0.5) + extraDist;
     const rock = Array.from({ length: 9 }, () => rand(0.82, 1.08));
     this.asteroids.push({
       shape,

@@ -36,7 +36,8 @@ export const LEVELS: LevelDef[] = NAMES.map((name, i) => ({
 
 export interface WaveDef {
   count: number;
-  /** Seconds an asteroid takes to travel from the spawn ring to the ship. */
+  /** Pace of the wave: each asteroid stays visible for travelTime × VISIBLE_SHARE seconds
+   *  before reaching the ship, whatever side it comes from and whatever the screen shape. */
   travelTime: number;
   spawnInterval: number;
   burstChance: number;
@@ -79,6 +80,32 @@ export function makeWave(levelIndex: number, waveIndex: number, rand: () => numb
   const weights = shapes.map((s) => (s === level.newShape && w < 6 ? 1.6 : 1));
 
   return { count, travelTime, spawnInterval, burstChance, burstMax, shapes, weights };
+}
+
+// ------------------------------------------------------------ Asteroid speed
+
+/**
+ * Share of `travelTime` an asteroid spends on screen. 0.665 keeps the average time of the
+ * former rule (one speed for every direction) on the desktop screen the game was tuned on.
+ */
+export const VISIBLE_SHARE = 0.665;
+
+/** Distance from the screen center to its edge, in the direction `angle`. */
+export function edgeDistance(angle: number, w: number, h: number): number {
+  const c = Math.abs(Math.cos(angle)) || 1e-6;
+  const s = Math.abs(Math.sin(angle)) || 1e-6;
+  return Math.min(w / 2 / c, h / 2 / s);
+}
+
+/**
+ * Speed (px/s) for an asteroid arriving from `angle`, so that it stays visible for the same time
+ * from every side and on every screen: on a tall phone, asteroids from the sides have less
+ * distance to cover, so they move slower instead of reaching the ship sooner.
+ * `hitDistance` is how close to the center it gets before hitting the ship.
+ */
+export function approachSpeed(angle: number, w: number, h: number, hitDistance: number, travelTime: number): number {
+  const visibleDistance = Math.max(20, edgeDistance(angle, w, h) - hitDistance);
+  return visibleDistance / (travelTime * VISIBLE_SHARE);
 }
 
 // ------------------------------------------------------------ Endless mode
