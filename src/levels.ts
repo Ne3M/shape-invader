@@ -96,7 +96,7 @@ export function approachSpeed(angle: number, w: number, h: number, hitDistance: 
 
 const ENDLESS_START_SHAPES = 3;
 /** A new shape type joins the endless pool every this many waves, until all are in. */
-const ENDLESS_SHAPE_EVERY = 3;
+const ENDLESS_SHAPE_EVERY = 2;
 
 /**
  * The order in which shapes join an endless run, shuffled for every run so no two games play alike.
@@ -111,7 +111,7 @@ export function shuffledShapes(rand: () => number = Math.random): ShapeId[] {
   return order;
 }
 
-/** Shape types in play at endless wave `w` (0-based): the first 3 of the run's order, then one more every 3 waves. */
+/** Shape types in play at endless wave `w` (0-based): the first 3 of the run's order, then one more every 2 waves. */
 export function endlessShapes(w: number, order: readonly ShapeId[] = SHAPE_ORDER): ShapeId[] {
   return order.slice(0, Math.min(order.length, ENDLESS_START_SHAPES + Math.floor(w / ENDLESS_SHAPE_EVERY)));
 }
@@ -123,21 +123,56 @@ export function endlessNewShape(w: number, order: readonly ShapeId[] = SHAPE_ORD
   return n > endlessShapes(w - 1, order).length ? order[n - 1] : undefined;
 }
 
+/** Endless pacing: start values, and how much one "speed step" changes them. */
+const ENDLESS = {
+  travel: 7, // seconds of approach (see WaveDef.travelTime)
+  interval: 1.2, // seconds between asteroids
+  travelStep: 0.25,
+  intervalStep: 0.05,
+  minTravel: 2.6,
+  minInterval: 0.3,
+  /** Shape types mixed in one wave while shapes are still being unlocked. */
+  unlockMaxDistinct: 5,
+  /** Waves last about this long (spawning time): faster spawning means more asteroids. */
+  spawnSpan: 10 * WAVE_LENGTH,
+  /** Once all shapes are in, each wave adds this much of a speed step (unless it adds a shape type). */
+  speedPerWave: 0.5,
+};
+
+/** Wave index at which the last shape joins an endless run (0-based). */
+export const ENDLESS_ALL_UNLOCKED = (SHAPE_ORDER.length - ENDLESS_START_SHAPES) * ENDLESS_SHAPE_EVERY;
+
 /**
- * Endless wave `w` (0-based). Starts about like level 3 and keeps growing with no end:
- * more asteroids per wave, faster, denser, with bigger bursts and more shape types at once.
- * Speed and spawn rate reach their limits around wave 27; asteroid count keeps rising to wave ~35.
+ * How hard endless wave `w` is, as two counters, in two phases:
+ * 1. Unlocking (until all shapes are in): pace stays the same; only the variety grows,
+ *    up to 5 shape types per wave.
+ * 2. All shapes in: a 3-wave cycle — half a speed step, half a speed step, one more shape
+ *    type (5 → 8) — so every wave gets a little harder. Once all 8 types mix, every wave
+ *    adds half a speed step.
+ */
+export function endlessDifficulty(w: number): { distinct: number; speedSteps: number } {
+  const k = Math.max(0, w - ENDLESS_ALL_UNLOCKED); // waves since the last shape joined
+  const extraDistinct = Math.min(SHAPE_ORDER.length - ENDLESS.unlockMaxDistinct, Math.floor(k / 3));
+  return { distinct: ENDLESS.unlockMaxDistinct + extraDistinct, speedSteps: (k - extraDistinct) * ENDLESS.speedPerWave };
+}
+
+/**
+ * Endless wave `w` (0-based). See endlessDifficulty for how it grows. A speed step shortens the
+ * approach and the gap between asteroids (so a wave holds more of them); once both reach their
+ * limits (around wave 50), bursts and asteroid count keep growing so it never levels off.
  */
 export function makeEndlessWave(w: number, rand: () => number = Math.random, order: readonly ShapeId[] = SHAPE_ORDER): WaveDef {
-  const count = Math.min(48, Math.round((5 + 1.1 * w) * WAVE_LENGTH));
-  const travelTime = Math.max(2.6, 8 - 0.2 * w);
-  const spawnInterval = Math.max(0.28, 1.4 - 0.04 * w);
-  const burstChance = Math.min(0.55, 0.02 * w);
-  const burstMax = Math.min(5, 2 + Math.floor(w / 6));
+  const { distinct: maxDistinct, speedSteps: s } = endlessDifficulty(w);
+  const travelTime = Math.max(ENDLESS.minTravel, ENDLESS.travel - ENDLESS.travelStep * s);
+  const spawnInterval = Math.max(ENDLESS.minInterval, ENDLESS.interval - ENDLESS.intervalStep * s);
+  const capped = Math.max(0, s - (ENDLESS.interval - ENDLESS.minInterval) / ENDLESS.intervalStep);
+  const count = Math.min(70, Math.round(ENDLESS.spawnSpan / spawnInterval + 2 * capped));
+  const burstChance = Math.min(0.6, 0.08 + 0.02 * s);
+  const burstMax = Math.min(6, 2 + Math.floor(s / 5));
 
   const pool = endlessShapes(w, order);
   const fresh = endlessNewShape(w, order);
-  const distinct = Math.min(pool.length, 2 + Math.floor(w / 4));
+  const distinct = Math.min(pool.length, maxDistinct);
   const chosen = new Set<ShapeId>();
   if (fresh) chosen.add(fresh);
   const rest = pool.filter((s) => !chosen.has(s)).sort(() => rand() - 0.5);

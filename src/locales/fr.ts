@@ -52,7 +52,7 @@ export const fr: Messages = {
   'intro.levelOf': 'Niveau {n} sur {total}',
   'intro.endlessKicker': 'Mode sans limite',
   'intro.endlessText':
-    'Pas de dernière vague. Chaque vague apporte plus d’astéroïdes et plus de vitesse, et une nouvelle forme arrive toutes les 3 vagues. Jusqu’où iras-tu ?',
+    'Pas de dernière vague. Une nouvelle forme arrive toutes les 2 vagues, puis le rythme ne cesse d’accélérer. Jusqu’où iras-tu ?',
   'intro.record': 'Ton record : vague {wave}',
   'intro.firstShape': 'Ta première forme',
   'intro.newShape': 'Nouvelle forme',

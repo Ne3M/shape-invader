@@ -60,7 +60,7 @@ export const en = {
   'intro.levelOf': 'Level {n} of {total}',
   'intro.endlessKicker': 'Endless mode',
   'intro.endlessText':
-    'No final wave. Every wave brings more asteroids and more speed, and a new shape joins every 3 waves. How far can you go?',
+    'No final wave. A new shape joins every 2 waves, then the pace keeps picking up. How far can you go?',
   'intro.record': 'Your best: wave {wave}',
   'intro.firstShape': 'Your first shape',
   'intro.newShape': 'New shape',
