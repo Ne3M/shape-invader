@@ -155,6 +155,8 @@ export interface LevelResult {
   bestMultiplier: number;
   stars: number;
   wave: number;
+  /** Time played in seconds (pauses excluded, stops when the shield breaks). */
+  duration: number;
 }
 
 const COOLDOWN = 0.2;
@@ -226,6 +228,8 @@ export class Game {
   private spawnTimer = 0;
   private breakTimer = 0;
   private endTimer = 0;
+  /** Run time when the shield broke (the death animation doesn't count). */
+  private deathTime = 0;
   private dying = false;
   private shield = SHIELD_MAX;
   private lastHit = -99;
@@ -497,6 +501,7 @@ export class Game {
       bestMultiplier: this.bestMultiplier,
       stars,
       wave: this.waveIndex + 1,
+      duration: this.dying ? this.deathTime : this.time,
     };
   }
 
@@ -698,6 +703,7 @@ export class Game {
 
   private die(): void {
     this.dying = true;
+    this.deathTime = this.time;
     this.endTimer = 1.6;
     this.cancelStroke();
     this.sfx.gameOver();

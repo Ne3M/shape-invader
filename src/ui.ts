@@ -11,6 +11,15 @@ type ScreenId = 'title' | 'levels' | 'intro' | 'pause' | 'complete' | 'over';
 /** `selected` value meaning endless mode instead of a level index. */
 const ENDLESS = -1;
 
+/** Seconds as m:ss, or h:mm:ss past an hour. */
+export function formatDuration(seconds: number): string {
+  const s = Math.max(0, Math.floor(seconds));
+  const pad = (n: number) => String(n).padStart(2, '0');
+  const h = Math.floor(s / 3600);
+  const m = Math.floor((s % 3600) / 60);
+  return h > 0 ? `${h}:${pad(m)}:${pad(s % 60)}` : `${m}:${pad(s % 60)}`;
+}
+
 const $ = <T extends HTMLElement = HTMLElement>(sel: string, root: ParentNode = document) => root.querySelector(sel) as T;
 
 export class UI {
@@ -391,6 +400,7 @@ export class UI {
       $('.over-stats').innerHTML =
         this.stats([
           [t('stats.reached'), t('hud.wave', { n: r.wave })],
+          [t('stats.duration'), formatDuration(r.duration)],
           [t('stats.score'), fmt(r.score)],
           [t('stats.bestWave'), fmt(this.rec.endlessBestWave)],
           [t('stats.bestScore'), fmt(this.rec.endlessBestScore)],

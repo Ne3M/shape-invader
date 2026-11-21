@@ -83,6 +83,7 @@ export const en = {
   'stats.bestCombo': 'Best combo',
   'stats.shieldHits': 'Shield hits',
   'stats.reached': 'Reached',
+  'stats.duration': 'Time',
   'stats.bestWave': 'Best wave',
   'stats.bestScore': 'Best score',
   'stats.newBest': 'New best!',

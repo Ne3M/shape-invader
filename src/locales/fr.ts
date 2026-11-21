@@ -74,6 +74,7 @@ export const fr: Messages = {
   'stats.bestCombo': 'Meilleur combo',
   'stats.shieldHits': 'Coups encaissés',
   'stats.reached': 'Atteint',
+  'stats.duration': 'Durée',
   'stats.bestWave': 'Meilleure vague',
   'stats.bestScore': 'Meilleur score',
   'stats.newBest': 'Nouveau record !',
