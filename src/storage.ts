@@ -1,3 +1,4 @@
+import { isLang, type Lang } from './i18n';
 import { LEVEL_COUNT } from './levels';
 
 /** Scores of one game mode (Normal or Expert), kept apart so each has its own leaderboard. */
@@ -15,6 +16,8 @@ export interface SaveData {
   musicMuted: boolean;
   /** Expert mode selected (shape-specific asteroid routes). */
   expert: boolean;
+  /** Language chosen on the title screen; null = follow the device language. */
+  lang: Lang | null;
   normal: Records;
   expertRecords: Records;
 }
@@ -30,7 +33,7 @@ function freshRecords(): Records {
 }
 
 function fresh(): SaveData {
-  return { unlocked: START_UNLOCKED, sfxMuted: false, musicMuted: false, expert: false, normal: freshRecords(), expertRecords: freshRecords() };
+  return { unlocked: START_UNLOCKED, sfxMuted: false, musicMuted: false, expert: false, lang: null, normal: freshRecords(), expertRecords: freshRecords() };
 }
 
 function readRecords(r: Partial<Records> | undefined): Records {
@@ -52,6 +55,7 @@ export function loadSave(): SaveData {
     d.sfxMuted = p.sfxMuted ?? p.muted ?? false;
     d.musicMuted = p.musicMuted ?? p.muted ?? false;
     d.expert = p.expert === true;
+    d.lang = isLang(p.lang) ? p.lang : null;
     // Records from before Expert mode existed become the Normal mode's records.
     d.normal = readRecords(
       p.normal ?? { best: p.best, stars: p.stars, endlessBestWave: p.endlessBestWave, endlessBestScore: p.endlessBestScore },

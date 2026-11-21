@@ -4,7 +4,8 @@
 import '../src/style.css';
 import { Sfx } from '../src/audio';
 import { Game } from '../src/game';
-import { SHAPE_ORDER, SHAPES, shapeSvg } from '../src/shapes';
+import { shapeName } from '../src/i18n';
+import { SHAPE_ORDER, shapeSvg } from '../src/shapes';
 
 const sfx = new Sfx();
 sfx.setMusicMuted(true); // music off by default here: we're listening to effects
@@ -22,8 +23,8 @@ sfx.setMusicMode('game');
 const shapesEl = document.querySelector('.shapes')!;
 for (const shape of SHAPE_ORDER) {
   const b = document.createElement('button');
-  b.title = `Blast every ${SHAPES[shape].name.toLowerCase()}`;
-  b.innerHTML = `${shapeSvg(shape, 18)}${SHAPES[shape].name}`;
+  b.title = shapeName(shape);
+  b.innerHTML = `${shapeSvg(shape, 18)}${shapeName(shape)}`;
   b.addEventListener('click', () => {
     sfx.unlock();
     game.triggerShape(shape);

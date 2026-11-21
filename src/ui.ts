@@ -1,5 +1,6 @@
 import type { Sfx } from './audio';
 import { BOMB_CHARGE_TIME, type Game, type HudState, type LevelResult } from './game';
+import { LANGUAGES, LANG_CODES, fmt, getLang, levelName, levelTwist, onLangChange, setLang, shapeName, t } from './i18n';
 import { LEVELS, LEVEL_COUNT, WAVES_PER_LEVEL, endlessShapes } from './levels';
 import { SHAPE_ORDER, SHAPES, demoStroke, shapeSvg } from './shapes';
 import { writeSave, type Records, type SaveData } from './storage';
@@ -24,7 +25,7 @@ export class UI {
 
   /** Added to screen headers when playing in Expert mode. */
   private get modeTag(): string {
-    return this.save.expert ? ' · Expert' : '';
+    return this.save.expert ? t('mode.expertTag') : '';
   }
 
   constructor(
@@ -36,6 +37,8 @@ export class UI {
     this.sfx.setMuted(save.sfxMuted);
     this.sfx.setMusicMuted(save.musicMuted);
     this.updateMuteButtons();
+    this.buildLangSwitch();
+    onLangChange(() => this.refreshTexts());
 
     // Browsers only allow audio after a user gesture: start it on the first touch or click anywhere.
     document.addEventListener('pointerdown', () => this.sfx.unlock(), { once: true });
@@ -92,9 +95,43 @@ export class UI {
     });
 
     game.onHud = (h) => this.updateHud(h);
-    game.onBanner = (t, s) => this.banner(t, s);
+    game.onBanner = (title, sub) => this.banner(title, sub);
     game.onLevelComplete = (r) => this.levelComplete(r);
     game.onGameOver = (r) => this.gameOver(r);
+  }
+
+  /** Language switch on the title screen: one button per available language. */
+  private buildLangSwitch(): void {
+    const box = $('.lang-switch');
+    box.innerHTML = LANG_CODES.map(
+      (code) => `<button data-lang="${code}" lang="${code}" title="${LANGUAGES[code]['lang.name']}">${LANGUAGES[code]['lang.code']}</button>`,
+    ).join('');
+    box.querySelectorAll<HTMLButtonElement>('[data-lang]').forEach((b) =>
+      b.addEventListener('click', () => {
+        const code = b.dataset.lang as (typeof LANG_CODES)[number];
+        if (code === getLang()) return;
+        this.sfx.unlock();
+        this.sfx.click();
+        this.save.lang = code;
+        writeSave(this.save);
+        setLang(code);
+      }),
+    );
+    this.markLang();
+  }
+
+  private markLang(): void {
+    document.querySelectorAll<HTMLElement>('[data-lang]').forEach((b) => b.setAttribute('aria-pressed', String(b.dataset.lang === getLang())));
+  }
+
+  /** Re-renders texts built in code after the language changed (static HTML is handled by i18n). */
+  private refreshTexts(): void {
+    this.markLang();
+    this.updateMuteButtons();
+    $('.title-shapes').innerHTML = SHAPE_ORDER.map((s) => shapeSvg(s, 30)).join('');
+    this.hudCache = { ...this.hudCache, wave: -1, bomb: -1, shapes: '' };
+    if (this.current === 'levels') this.showLevels();
+    else if (this.current === 'intro') this.showIntro(this.selected);
   }
 
   private updateMuteButtons(): void {
@@ -104,8 +141,8 @@ export class UI {
     sfx.classList.toggle('muted', this.save.sfxMuted);
     music.setAttribute('aria-pressed', String(!this.save.musicMuted));
     sfx.setAttribute('aria-pressed', String(!this.save.sfxMuted));
-    music.title = this.save.musicMuted ? 'Music off' : 'Music on';
-    sfx.title = this.save.sfxMuted ? 'Sound effects off' : 'Sound effects on';
+    music.title = t(this.save.musicMuted ? 'audio.musicOff' : 'audio.musicOn');
+    sfx.title = t(this.save.sfxMuted ? 'audio.sfxOff' : 'audio.sfxOn');
   }
 
   private show(id: ScreenId | null): void {
@@ -157,29 +194,28 @@ export class UI {
     document.querySelectorAll<HTMLElement>('[data-mode]').forEach((b) =>
       b.setAttribute('aria-pressed', String((b.dataset.mode === 'expert') === this.save.expert)),
     );
-    $('.mode-hint').textContent = this.save.expert
-      ? 'Each shape follows its own route: circles spiral in, zigzags zigzag, squares take the stairs…'
-      : 'Asteroids fly straight at your ship.';
+    $('.mode-hint').textContent = t(this.save.expert ? 'levels.hintExpert' : 'levels.hintNormal');
     $('#screen-levels .panel').classList.toggle('expert', this.save.expert);
     const stars = (n: number) => [0, 1, 2].map((i) => `<span class="${i < n ? '' : 'off'}">★</span>`).join('');
     $('.level-grid').innerHTML = LEVELS.map((lv) => {
       const locked = lv.index >= this.save.unlocked;
+      const best = this.rec.best[lv.index];
       return `<button class="level-card" data-action="level" data-level="${lv.index}" ${locked ? 'disabled' : ''}>
         <div class="level-num">${locked ? '🔒' : lv.index + 1}</div>
-        <div class="level-name">${lv.name}</div>
+        <div class="level-name">${levelName(lv.index)}</div>
         <div class="level-icons">${lv.shapes.map((s) => shapeSvg(s, 16)).join('')}</div>
         <div class="level-stars">${stars(this.rec.stars[lv.index])}</div>
-        <div class="level-best">${this.rec.best[lv.index] ? `Best ${this.rec.best[lv.index].toLocaleString()}` : '&nbsp;'}</div>
+        <div class="level-best">${best ? t('levels.best', { score: fmt(best) }) : '&nbsp;'}</div>
       </button>`;
     }).join('');
     const { endlessBestWave: bw, endlessBestScore: bs } = this.rec;
     $('.endless-slot').innerHTML = `<button class="level-card endless-card" data-action="endless">
         <div class="endless-mark">∞</div>
         <div class="endless-text">
-          <div class="endless-title">Endless</div>
-          <div class="level-name">As many waves as you can survive</div>
+          <div class="endless-title">${t('endless.name')}</div>
+          <div class="level-name">${t('endless.tagline')}</div>
         </div>
-        <div class="level-best">${bw ? `Best: wave ${bw} · ${bs.toLocaleString()}` : 'No record yet'}</div>
+        <div class="level-best">${bw ? t('endless.best', { wave: bw, score: fmt(bs) }) : t('endless.noRecord')}</div>
       </button>`;
     this.show('levels');
   }
@@ -187,28 +223,27 @@ export class UI {
   private showIntro(index: number): void {
     this.selected = index;
     if (index === ENDLESS) {
-      $('.intro-kicker').textContent = `Endless mode${this.modeTag}`;
-      $('.intro-name').textContent = 'Endless';
+      $('.intro-kicker').textContent = t('intro.endlessKicker') + this.modeTag;
+      $('.intro-name').textContent = t('endless.name');
       $('.intro-new').innerHTML = '';
-      $('.intro-twist').textContent =
-        'No final wave. Every wave brings more asteroids and more speed, and a new shape joins every 3 waves. How far can you go?';
+      $('.intro-twist').textContent = t('intro.endlessText');
       $('.intro-pool').innerHTML =
         endlessShapes(0).map((sh) => shapeSvg(sh, 30)).join('') +
-        (this.rec.endlessBestWave ? `<div class="intro-record">Your best: wave ${this.rec.endlessBestWave}</div>` : '');
+        (this.rec.endlessBestWave ? `<div class="intro-record">${t('intro.record', { wave: this.rec.endlessBestWave })}</div>` : '');
       this.show('intro');
       return;
     }
     const lv = LEVELS[index];
-    $('.intro-kicker').textContent = `Level ${index + 1} of ${LEVEL_COUNT}${this.modeTag}`;
-    $('.intro-name').textContent = lv.name;
+    $('.intro-kicker').textContent = t('intro.levelOf', { n: index + 1, total: LEVEL_COUNT }) + this.modeTag;
+    $('.intro-name').textContent = levelName(index);
     const s = lv.newShape;
     $('.intro-new').innerHTML = s
-      ? `<div class="label">${index === 0 ? 'Your first shape' : 'New shape'}</div>
+      ? `<div class="label">${t(index === 0 ? 'intro.firstShape' : 'intro.newShape')}</div>
          ${shapeSvg(s, 130, demoStroke(s))}
-         <div class="new-name" style="color:${SHAPES[s].color}">${SHAPES[s].name}</div>
-         <div class="hint">${SHAPES[s].hint}</div>`
+         <div class="new-name" style="color:${SHAPES[s].color}">${shapeName(s)}</div>
+         <div class="hint">${t(`shape.${s}.hint`)}</div>`
       : '';
-    $('.intro-twist').textContent = lv.twist ?? `${WAVES_PER_LEVEL} waves. Draw a shape to blast every asteroid of that shape on screen.`;
+    $('.intro-twist').textContent = levelTwist(index) ?? t('intro.defaultTwist', { waves: WAVES_PER_LEVEL });
     $('.intro-pool').innerHTML = lv.shapes.map((sh) => shapeSvg(sh, 30)).join('');
     this.show('intro');
   }
@@ -244,7 +279,7 @@ export class UI {
     }
     if (h.score !== c.score) {
       c.score = h.score;
-      $('.hud-score').textContent = h.score.toLocaleString();
+      $('.hud-score').textContent = fmt(h.score);
     }
     if (h.multiplier !== c.multiplier) {
       const combo = $('.hud-combo');
@@ -260,16 +295,17 @@ export class UI {
       c.wave = h.wave;
       c.level = h.level;
       c.expert = h.expert;
+      const tag = h.expert ? t('mode.expertTag') : '';
       if (h.endless) {
         // Endless: the groove reaches full intensity around wave 20.
         this.sfx.setMusicIntensity(Math.min(1, (h.wave - 1) / 20));
-        $('.hud-wave').textContent = `Wave ${h.wave}`;
-        $('.hud-level').textContent = h.expert ? 'Endless · Expert' : 'Endless';
+        $('.hud-wave').textContent = t('hud.wave', { n: h.wave });
+        $('.hud-level').textContent = t('endless.name') + tag;
       } else {
         // The groove builds up over the waves; later levels start hotter.
         this.sfx.setMusicIntensity(((h.wave - 1) / (WAVES_PER_LEVEL - 1)) * 0.75 + ((h.level - 1) / (LEVEL_COUNT - 1)) * 0.35);
-        $('.hud-wave').textContent = `Wave ${h.wave}/${WAVES_PER_LEVEL}`;
-        $('.hud-level').textContent = `Level ${h.level}${h.expert ? ' · Expert' : ''}`;
+        $('.hud-wave').textContent = t('hud.waveOf', { n: h.wave, total: WAVES_PER_LEVEL });
+        $('.hud-level').textContent = t('hud.level', { n: h.level }) + tag;
       }
     }
     // Bomb charge ring (updated in small steps to avoid restyling every frame).
@@ -280,7 +316,7 @@ export class UI {
       btn.style.setProperty('--charge', String(bomb));
       btn.classList.toggle('ready', bomb >= 1);
       btn.setAttribute('aria-disabled', String(bomb < 1));
-      btn.title = bomb >= 1 ? 'Bomb ready (Space)' : `Bomb charging… ${Math.max(1, Math.round((1 - h.bomb) * BOMB_CHARGE_TIME))} s`;
+      btn.title = bomb >= 1 ? t('hud.bombReady') : t('hud.bombCharging', { s: Math.max(1, Math.round((1 - h.bomb) * BOMB_CHARGE_TIME)) });
     }
     // Shapes in play (grows during an endless run).
     const key = h.shapes.join(',');
@@ -314,17 +350,17 @@ export class UI {
     writeSave(this.save);
 
     const last = i === LEVEL_COUNT - 1;
-    $('.complete-kicker').textContent = `Level ${i + 1} · ${LEVELS[i].name}${this.modeTag}`;
-    $('.complete-title').textContent = last ? 'You beat Shape Invaders!' : 'Level clear!';
+    $('.complete-kicker').textContent = `${t('hud.level', { n: i + 1 })} · ${levelName(i)}${this.modeTag}`;
+    $('.complete-title').textContent = t(last ? 'complete.won' : 'complete.title');
     $('#screen-complete .stars').innerHTML = [0, 1, 2].map((k) => `<span class="${k < r.stars ? '' : 'off'}">★</span>`).join('');
     $('.complete-stats').innerHTML =
       this.stats([
-        ['Score', r.score.toLocaleString()],
-        ['Best', this.rec.best[i].toLocaleString()],
-        ['Asteroids', String(r.kills)],
-        ['Best combo', `×${r.bestMultiplier}`],
-        ['Shield hits', String(r.hits)],
-      ]) + (newBest ? '<div class="new-best">New best!</div>' : '');
+        [t('stats.score'), fmt(r.score)],
+        [t('stats.best'), fmt(this.rec.best[i])],
+        [t('stats.asteroids'), fmt(r.kills)],
+        [t('stats.bestCombo'), `×${r.bestMultiplier}`],
+        [t('stats.shieldHits'), fmt(r.hits)],
+      ]) + (newBest ? `<div class="new-best">${t('stats.newBest')}</div>` : '');
     $('[data-action="next"]', $('#screen-complete')).classList.toggle('hidden', last);
     this.show('complete');
   }
@@ -336,28 +372,28 @@ export class UI {
       this.rec.endlessBestWave = Math.max(this.rec.endlessBestWave, r.wave);
       this.rec.endlessBestScore = Math.max(this.rec.endlessBestScore, r.score);
       writeSave(this.save);
-      $('.over-kicker').textContent = `Endless mode${this.modeTag}`;
+      $('.over-kicker').textContent = t('intro.endlessKicker') + this.modeTag;
       $('.over-stats').innerHTML =
         this.stats([
-          ['Reached', `Wave ${r.wave}`],
-          ['Score', r.score.toLocaleString()],
-          ['Best wave', String(this.rec.endlessBestWave)],
-          ['Best score', this.rec.endlessBestScore.toLocaleString()],
-          ['Asteroids', String(r.kills)],
-          ['Best combo', `×${r.bestMultiplier}`],
-        ]) + (newWave || newScore ? `<div class="new-best">${newWave ? 'New best wave!' : 'New best score!'}</div>` : '');
+          [t('stats.reached'), t('hud.wave', { n: r.wave })],
+          [t('stats.score'), fmt(r.score)],
+          [t('stats.bestWave'), fmt(this.rec.endlessBestWave)],
+          [t('stats.bestScore'), fmt(this.rec.endlessBestScore)],
+          [t('stats.asteroids'), fmt(r.kills)],
+          [t('stats.bestCombo'), `×${r.bestMultiplier}`],
+        ]) + (newWave || newScore ? `<div class="new-best">${t(newWave ? 'stats.newBestWave' : 'stats.newBestScore')}</div>` : '');
       this.show('over');
       return;
     }
     const i = r.level;
     this.rec.best[i] = Math.max(this.rec.best[i], r.score);
     writeSave(this.save);
-    $('.over-kicker').textContent = `Level ${i + 1} · ${LEVELS[i].name}${this.modeTag}`;
+    $('.over-kicker').textContent = `${t('hud.level', { n: i + 1 })} · ${levelName(i)}${this.modeTag}`;
     $('.over-stats').innerHTML = this.stats([
-      ['Reached', `Wave ${r.wave}/${WAVES_PER_LEVEL}`],
-      ['Score', r.score.toLocaleString()],
-      ['Asteroids', String(r.kills)],
-      ['Best combo', `×${r.bestMultiplier}`],
+      [t('stats.reached'), t('hud.waveOf', { n: r.wave, total: WAVES_PER_LEVEL })],
+      [t('stats.score'), fmt(r.score)],
+      [t('stats.asteroids'), fmt(r.kills)],
+      [t('stats.bestCombo'), `×${r.bestMultiplier}`],
     ]);
     this.show('over');
   }

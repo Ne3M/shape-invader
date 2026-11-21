@@ -4,34 +4,18 @@ export const LEVEL_COUNT = 10;
 export const WAVES_PER_LEVEL = 10;
 const WAVE_LENGTH = 1.24;
 
+/** Level names and special rules are translated: see levelName() / levelTwist() and `level.*` keys. */
 export interface LevelDef {
   index: number;
-  name: string;
   shapes: ShapeId[];
   /** Shape introduced in this level, shown on the intro card. */
   newShape?: ShapeId;
-  twist?: string;
 }
 
-const NAMES = [
-  'First Contact',
-  'Sharp Turns',
-  'Four Corners',
-  'Endless Loop',
-  'Straight Shot',
-  'Point Break',
-  'Making Waves',
-  'Zigzag Alley',
-  'The Swarm',
-  'Shape Storm',
-];
-
-export const LEVELS: LevelDef[] = NAMES.map((name, i) => ({
+export const LEVELS: LevelDef[] = Array.from({ length: LEVEL_COUNT }, (_, i) => ({
   index: i,
-  name,
   shapes: SHAPE_ORDER.slice(0, Math.min(i + 1, SHAPE_ORDER.length)),
   newShape: i < SHAPE_ORDER.length ? SHAPE_ORDER[i] : undefined,
-  twist: i === 8 ? 'All shapes. Faster, denser waves.' : i === 9 ? 'All shapes. Bursts from every side.' : undefined,
 }));
 
 export interface WaveDef {

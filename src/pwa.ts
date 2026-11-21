@@ -1,3 +1,5 @@
+import { t, type MessageKey } from './i18n';
+
 /** Installable app support: service worker registration, install button, and an iOS install guide. */
 
 interface BeforeInstallPromptEvent extends Event {
@@ -30,44 +32,34 @@ export function detectIosBrowser(ua: string, platform = '', maxTouchPoints = 0):
   return 'safari';
 }
 
-const ICON = {
-  share: `<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-label="Share"><path d="M12 3v12M7 8l5-5 5 5M5 12v8h14v-8"/></svg>`,
-  add: `<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-label="Add"><rect x="4" y="4" width="16" height="16" rx="4"/><path d="M12 8v8M8 12h8"/></svg>`,
-  more: `<span class="key" aria-label="More">•••</span>`,
-};
+/** Icons shown inside the steps (their labels are translated when used). */
+function icons(): Record<'share' | 'add' | 'more', string> {
+  return {
+    share: `<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-label="${t('install.icon.share')}"><path d="M12 3v12M7 8l5-5 5 5M5 12v8h14v-8"/></svg>`,
+    add: `<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-label="${t('install.icon.add')}"><rect x="4" y="4" width="16" height="16" rx="4"/><path d="M12 8v8M8 12h8"/></svg>`,
+    more: `<span class="key" aria-label="${t('install.icon.more')}">•••</span>`,
+  };
+}
 
-/** Step-by-step instructions (HTML) for adding the game to the Home Screen. */
+/** Step-by-step instructions (HTML, in the current language) for adding the game to the Home Screen. */
 export function iosInstallSteps(kind: IosBrowser): string[] {
-  const addToHome = `Tap <b>Add to Home Screen</b> ${ICON.add} (scroll down the list if you don't see it).`;
+  const step = (key: MessageKey) => t(key, icons());
   switch (kind) {
     case 'safari':
-      return [
-        `Tap the ${ICON.more} button next to the address bar.<br><small>On older iOS, tap the Share button ${ICON.share} at the bottom of the screen and skip to step 3.</small>`,
-        `Tap <b>Share</b> ${ICON.share}.`,
-        addToHome,
-        `Leave <b>Open as Web App</b> on if you see it, then tap <b>Add</b>.`,
-      ];
+      return [step('install.safari.more'), step('install.step.share'), step('install.step.addToHome'), step('install.safari.webApp')];
     case 'chrome':
-      return [
-        `Tap the Share button ${ICON.share} in the address bar.`,
-        addToHome,
-        `Tap <b>Add</b>.<br><small>Not in the list? Your iOS is too old for this in Chrome: open the page in Safari instead.</small>`,
-      ];
+      return [step('install.chrome.share'), step('install.step.addToHome'), step('install.chrome.add')];
     case 'firefox':
     case 'edge':
-      return [`Open the browser menu (${ICON.more} or ☰).`, `Tap <b>Share</b> ${ICON.share}.`, addToHome, `Tap <b>Add</b>.`];
+      return [step('install.menu.open'), step('install.step.share'), step('install.step.addToHome'), step('install.step.add')];
     case 'inapp':
-      return [
-        `The game is open <b>inside another app</b>, which can't install it.`,
-        `Tap ${ICON.more} or the compass icon in this screen, then <b>Open in Safari</b> (or “Open in browser”).`,
-        `In Safari, tap <b>Install app</b> again and follow the steps.`,
-      ];
+      return [step('install.inapp.why'), step('install.inapp.open'), step('install.inapp.again')];
   }
 }
 
 function showIosGuide(kind: IosBrowser, device: string): void {
   const sheet = document.getElementById('install-sheet')!;
-  sheet.querySelector('.install-title')!.textContent = `Install on ${device}`;
+  sheet.querySelector('.install-title')!.textContent = t('install.title', { device });
   sheet.querySelector('.install-steps')!.innerHTML = iosInstallSteps(kind)
     .map((s) => `<li>${s}</li>`)
     .join('');

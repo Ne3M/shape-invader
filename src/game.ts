@@ -11,6 +11,7 @@ import {
   pickWeighted,
   type WaveDef,
 } from './levels';
+import { levelName, shapeName, t } from './i18n';
 import { expertCorners, expertPath, type RouteCorner } from './paths';
 import { MIN_STROKE_SIZE, recognize } from './recognizer';
 import { SHAPE_ORDER, SHAPES, traceGlyph, type Pt, type ShapeId } from './shapes';
@@ -325,7 +326,7 @@ export class Game {
     this.shake = Math.max(this.shake, 18);
     this.shipPulse = 1;
     this.sfx.bomb();
-    this.floater(this.cx, this.cy - this.shipR * 3.2, targets.length ? `BOMB ×${targets.length}` : 'BOMB', '#ffffff', 24, 1.2);
+    this.floater(this.cx, this.cy - this.shipR * 3.2, targets.length ? t('fx.bombCount', { n: targets.length }) : t('fx.bomb'), '#ffffff', 24, 1.2);
     this.cancelStroke();
     return true;
   }
@@ -362,6 +363,9 @@ export class Game {
     this.state = 'menu';
     this.asteroids = [];
     this.blasts = [];
+    // A bomb set off just before leaving would otherwise stay frozen behind the menus.
+    this.shockwaves = [];
+    this.flash = 0;
     this.cancelStroke();
   }
 
@@ -446,14 +450,14 @@ export class Game {
   }
 
   private waveTitle(index: number): string {
-    return this.isLastWave(index) ? 'Final wave' : `Wave ${index + 1}`;
+    return this.isLastWave(index) ? t('banner.finalWave') : t('banner.wave', { n: index + 1 });
   }
 
   /** Banner subtitle for a wave: progress in a level; in endless mode, any newly added shape. */
   private waveSubtitle(index: number): string {
-    if (!this.endless) return `${index + 1} / ${WAVES_PER_LEVEL}`;
+    if (!this.endless) return t('banner.progress', { n: index + 1, total: WAVES_PER_LEVEL });
     const fresh = endlessNewShape(index);
-    return fresh ? `New shape: ${SHAPES[fresh].name}` : 'Endless';
+    return fresh ? t('banner.newShape', { shape: shapeName(fresh) }) : t('endless.name');
   }
 
   private currentShapes(): ShapeId[] {
@@ -583,11 +587,11 @@ export class Game {
       this.cooldownUntil = this.time + COOLDOWN;
       if (this.breakTimer > 0 || this.endTimer > 0) {
         // Between waves: just show what was recognized, no penalty.
-        this.floater(at.x, at.y - 20, info.name, info.color, 16);
+        this.floater(at.x, at.y - 20, shapeName(shape), info.color, 16);
         return;
       }
       if (!targets.length) {
-        this.misfire(at, `No ${info.name.toLowerCase()}`);
+        this.misfire(at, t(`shape.${shape}.none`));
         return;
       }
     }
@@ -609,7 +613,7 @@ export class Game {
 
     if (attract) return;
     this.sfx.blast();
-    this.floater(at.x, at.y - 20, info.name, info.color, 15);
+    this.floater(at.x, at.y - 20, shapeName(shape), info.color, 15);
 
     const n = targets.length;
     const mult = this.multiplier;
@@ -619,19 +623,19 @@ export class Game {
     this.kills += n;
     for (const a of targets) a.points = each;
     if (bonus) {
-      const label = n === 2 ? 'DOUBLE' : n === 3 ? 'TRIPLE' : n === 4 ? 'QUAD' : `${n}× MULTI`;
+      const label = n === 2 ? t('fx.double') : n === 3 ? t('fx.triple') : n === 4 ? t('fx.quad') : t('fx.multi', { n });
       this.floater(this.cx, this.cy - this.shipR * 3.2, `${label} +${bonus}`, info.color, 22, 1.3);
     }
     this.streak++;
     const newMult = Math.min(5, 1 + Math.floor(this.streak / 2));
-    if (newMult > this.multiplier) this.floater(this.cx, this.cy + this.shipR * 3.4, `COMBO ×${newMult}`, '#ffffff', 18, 1.1);
+    if (newMult > this.multiplier) this.floater(this.cx, this.cy + this.shipR * 3.4, t('fx.combo', { n: newMult }), '#ffffff', 18, 1.1);
     this.multiplier = newMult;
     this.bestMultiplier = Math.max(this.bestMultiplier, newMult);
   }
 
   private misfire(at: Pt, label: string): void {
     this.sfx.misfire();
-    if (this.multiplier > 1) this.floater(this.cx, this.cy + this.shipR * 3.4, 'Combo lost', '#8a90a8', 16);
+    if (this.multiplier > 1) this.floater(this.cx, this.cy + this.shipR * 3.4, t('fx.comboLost'), '#8a90a8', 16);
     this.streak = 0;
     this.multiplier = 1;
     this.floater(at.x, at.y - 20, label, '#8a90a8', 16);
@@ -677,7 +681,7 @@ export class Game {
     this.shield = Math.max(0, this.shield - HIT_DAMAGE);
     this.lastHit = this.time;
     this.shake = 16;
-    if (this.multiplier > 1) this.floater(this.cx, this.cy + this.shipR * 3.4, 'Combo lost', '#ff4f64', 16);
+    if (this.multiplier > 1) this.floater(this.cx, this.cy + this.shipR * 3.4, t('fx.comboLost'), '#ff4f64', 16);
     this.streak = 0;
     this.multiplier = 1;
     this.burst(a.x, a.y, '#ff4f64', 26, a.r * 4);
@@ -841,7 +845,7 @@ export class Game {
       this.bombCharge = Math.min(1, this.bombCharge + dt / BOMB_CHARGE_TIME);
       if (this.bombCharge >= 1) {
         this.sfx.bombReady();
-        this.floater(this.cx, this.cy + this.shipR * 3.4, 'Bomb ready', '#ffffff', 16, 1.2);
+        this.floater(this.cx, this.cy + this.shipR * 3.4, t('fx.bombReady'), '#ffffff', 16, 1.2);
       }
     }
 
@@ -878,14 +882,14 @@ export class Game {
       if (this.isLastWave(this.waveIndex)) {
         this.endTimer = 1.4;
         this.sfx.levelComplete();
-        this.onBanner?.('Level clear!', LEVELS[this.levelIndex].name);
+        this.onBanner?.(t('banner.levelClear'), levelName(this.levelIndex));
       } else {
         // Short breather: one banner announces the next wave and stays up while it starts.
         this.breakTimer = WAVE_BREAK;
         this.sfx.waveClear();
         const next = this.waveIndex + 1;
-        const progress = this.endless ? this.waveSubtitle(next) : `${next + 1} / ${WAVES_PER_LEVEL}`;
-        this.onBanner?.(this.waveTitle(next), `Wave ${next} clear · ${progress}`);
+        const progress = this.endless ? this.waveSubtitle(next) : t('banner.progress', { n: next + 1, total: WAVES_PER_LEVEL });
+        this.onBanner?.(this.waveTitle(next), t('banner.cleared', { n: next, next: progress }));
       }
     }
 
