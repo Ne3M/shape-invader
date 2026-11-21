@@ -6,6 +6,7 @@
   "scripts": {
     "dev": "vite --host",
     "lab": "vite --host --open /tools/fx-lab.html",
+    "stats": "vite --open /tools/stats.html",
     "build": "tsc --noEmit && vite build",
     "preview": "vite preview --host",
     "typecheck": "tsc --noEmit",

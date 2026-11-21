@@ -1,2 +1,4 @@
 node_modules
 dist
+# Umami exports: player data, never committed (and never in public/, which gets deployed).
+stats/
