@@ -16,7 +16,7 @@ const $ = <T extends HTMLElement = HTMLElement>(sel: string, root: ParentNode = 
 export class UI {
   private current: ScreenId | null = 'title';
   private selected = 0;
-  private hudCache = { shield: -1, score: -1, multiplier: -1, wave: -1, level: -1, shapes: '', expert: false, bomb: -1 };
+  private hudCache = { shield: -1, score: -1, multiplier: -1, wave: -1, level: -1, shapes: '', expert: false, bomb: -1, remaining: '' };
   private bannerTimer = 0;
   /** Endless: shape order drawn when its intro is shown, so the intro shows the run's first shapes. */
   private endlessOrder: ShapeId[] = shuffledShapes();
@@ -132,7 +132,7 @@ export class UI {
     this.markLang();
     this.updateMuteButtons();
     $('.title-shapes').innerHTML = SHAPE_ORDER.map((s) => shapeSvg(s, 30)).join('');
-    this.hudCache = { ...this.hudCache, wave: -1, bomb: -1, shapes: '' };
+    this.hudCache = { ...this.hudCache, wave: -1, bomb: -1, shapes: '', remaining: '' };
     if (this.current === 'levels') this.showLevels();
     else if (this.current === 'intro') this.showIntro(this.selected);
   }
@@ -255,7 +255,7 @@ export class UI {
   /** `fromIntro`: an endless run started from its intro keeps the shape order shown there; a retry draws a new one. */
   private startLevel(index: number, fromIntro = false): void {
     this.selected = index;
-    this.hudCache = { shield: -1, score: -1, multiplier: -1, wave: -1, level: -1, shapes: '', expert: !this.save.expert, bomb: -1 };
+    this.hudCache = { shield: -1, score: -1, multiplier: -1, wave: -1, level: -1, shapes: '', expert: !this.save.expert, bomb: -1, remaining: '' };
     this.show(null);
     if (index === ENDLESS) this.game.startEndless(this.save.expert, fromIntro ? this.endlessOrder : shuffledShapes());
     else this.game.startLevel(index, this.save.expert);
@@ -322,6 +322,16 @@ export class UI {
       btn.classList.toggle('ready', bomb >= 1);
       btn.setAttribute('aria-disabled', String(bomb < 1));
       btn.title = bomb >= 1 ? t('hud.bombReady') : t('hud.bombCharging', { s: Math.max(1, Math.round((1 - h.bomb) * BOMB_CHARGE_TIME)) });
+    }
+    // Shapes left in the wave, and a bar filling up as the wave is cleared.
+    const remKey = `${h.remaining}/${h.waveTotal}`;
+    if (remKey !== c.remaining) {
+      c.remaining = remKey;
+      const text =
+        h.remaining === 0 ? t('hud.waveDone') : h.remaining === 1 ? t('hud.remainingOne') : t('hud.remaining', { n: h.remaining });
+      $('.hud-remaining-text').textContent = text;
+      const done = h.waveTotal > 0 ? 1 - Math.min(h.remaining, h.waveTotal) / h.waveTotal : 0;
+      $('.hud-wave-fill').style.width = `${done * 100}%`;
     }
     // Shapes in play (grows during an endless run).
     const key = h.shapes.join(',');

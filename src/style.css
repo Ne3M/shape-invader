@@ -98,6 +98,58 @@ body {
   text-align: center;
 }
 
+/* Wave label with the shapes left in the wave and a progress bar under it. */
+.hud-center {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+}
+
+.hud-remaining {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 3px;
+}
+
+.hud-remaining-text {
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--text);
+  font-variant-numeric: tabular-nums;
+  letter-spacing: 0.04em;
+  white-space: nowrap;
+}
+
+/* Narrow phones: make room so "10 astéroïdes restants" stays on one line. */
+@media (max-width: 400px) {
+  .shield {
+    width: 28vw;
+  }
+  .hud-remaining-text {
+    font-size: 11px;
+    letter-spacing: 0.02em;
+  }
+}
+
+.hud-wave-bar {
+  width: min(120px, 26vw);
+  height: 4px;
+  border-radius: 2px;
+  background: rgba(255, 255, 255, 0.1);
+  overflow: hidden;
+}
+
+.hud-wave-fill {
+  height: 100%;
+  width: 0%;
+  background: var(--muted);
+  box-shadow: 0 0 8px var(--muted);
+  filter: brightness(1.2);
+  transition: width 0.2s ease-out;
+}
+
 .hud-right {
   text-align: right;
 }

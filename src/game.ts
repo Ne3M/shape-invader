@@ -139,6 +139,9 @@ export interface HudState {
   expert: boolean;
   /** Bomb charge, 0 → 1 (ready). */
   bomb: number;
+  /** Shapes left in the current wave (still to come + on screen, not yet hit), and the wave's total. */
+  remaining: number;
+  waveTotal: number;
 }
 
 export interface LevelResult {
@@ -908,6 +911,8 @@ export class Game {
       endless: this.endless,
       expert: this.expert,
       bomb: this.bombCharge,
+      remaining: this.toSpawn + this.asteroids.filter((a) => !a.dead && !a.targeted).length,
+      waveTotal: this.wave?.count ?? 0,
     });
   }
 
