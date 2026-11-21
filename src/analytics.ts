@@ -17,8 +17,10 @@ import { writeSave, type Records, type SaveData, type StatsInfo } from './storag
 const WEBSITE_ID = '706c5e2d-3da0-4724-91b9-2deb7a2dce51';
 const SCRIPT_URL = 'https://cloud.umami.is/script.js';
 const PENDING_KEY = 'shape-invaders-stats-pending';
-/** Version of the event's data format. */
-const FORMAT = 2;
+/** Version of the event's data format (3: records as lists, to stay under Umami's 50 properties). */
+const FORMAT = 3;
+/** Umami drops the data of an event with more properties than this. */
+export const MAX_PROPERTIES = 50;
 /** The anonymous id is replaced after 13 months (CNIL rule for audience measurement). */
 const ID_LIFETIME_DAYS = 395;
 
@@ -90,15 +92,18 @@ export function ensurePlayer(s: StatsInfo, date = today()): void {
   s.visits = 0;
 }
 
+/**
+ * One mode's records. Umami keeps at most 50 properties per event, so per-level values are lists:
+ * the 1st value is level 1, the 10th is level 10, 0 = never cleared.
+ */
 function recordFields(prefix: 'n' | 'x', r: Records): EventData {
-  const d: EventData = {};
-  for (let i = 0; i < LEVEL_COUNT; i++) {
-    d[`${prefix}${i + 1}Score`] = r.best[i] ?? 0;
-    d[`${prefix}${i + 1}Stars`] = r.stars[i] ?? 0;
-  }
-  d[`${prefix}EndlessWave`] = r.endlessBestWave;
-  d[`${prefix}EndlessScore`] = r.endlessBestScore;
-  return d;
+  const list = (values: number[]) => Array.from({ length: LEVEL_COUNT }, (_, i) => values[i] ?? 0).join(',');
+  return {
+    [`${prefix}Scores`]: list(r.best),
+    [`${prefix}Stars`]: list(r.stars),
+    [`${prefix}EndlessWave`]: r.endlessBestWave,
+    [`${prefix}EndlessScore`]: r.endlessBestScore,
+  };
 }
 
 /** The "session" event's data: the activity, who played, and every current record. */

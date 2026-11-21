@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { addRun, emptyActivity, ensurePlayer, sessionData, today } from '../src/analytics';
+import { MAX_PROPERTIES, addRun, emptyActivity, ensurePlayer, sessionData, today } from '../src/analytics';
 import type { LevelResult } from '../src/game';
 import { loadSave } from '../src/storage';
 
@@ -36,13 +36,16 @@ describe('session statistics', () => {
     addRun(a, run(), 'win');
     const d = sessionData(save, a, { lang: 'fr', pwa: true, late: false });
     expect(d).toMatchObject({
-      v: 2, playerId: 'abc', visit: 12, firstSeen: '2026-10-03', lang: 'fr', pwa: true, late: false,
+      v: 3, playerId: 'abc', visit: 12, firstSeen: '2026-10-03', lang: 'fr', pwa: true, late: false,
       games: 1, playTime: 61, levelsPlayed: '3', levelsWon: '3', unlocked: 2,
-      n1Score: 63600, n1Stars: 3, n10Score: 0, x10Stars: 0, xEndlessWave: 7, nEndlessScore: 0,
+      nScores: '63600,0,0,0,0,0,0,0,0,0', nStars: '3,0,0,0,0,0,0,0,0,0',
+      xScores: '0,0,0,0,0,0,0,0,0,0', xEndlessWave: 7, nEndlessScore: 0,
     });
     // Only strings, numbers and booleans: Umami stores flat properties.
     expect(Object.values(d).every((v) => ['string', 'number', 'boolean'].includes(typeof v))).toBe(true);
-    expect(Object.keys(d)).toHaveLength(65);
+    // Umami ignores the data of an event with more than 50 properties.
+    expect(Object.keys(d)).toHaveLength(29);
+    expect(Object.keys(d).length).toBeLessThanOrEqual(MAX_PROPERTIES);
   });
 
   it('gives a new player an id, keeps it, and renews it after 13 months', () => {
