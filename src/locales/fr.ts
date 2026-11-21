@@ -44,13 +44,13 @@ export const fr: Messages = {
   'common.levelSelect': 'Choix du niveau',
   'mode.expertTag': ' · Expert',
 
-  'endless.name': 'Mode infini',
+  'endless.name': 'Infini',
   'endless.tagline': 'Autant de vagues que tu peux en tenir',
   'endless.best': 'Record : vague {wave} · {score}',
   'endless.noRecord': 'Pas encore de record',
 
   'intro.levelOf': 'Niveau {n} sur {total}',
-  'intro.endlessKicker': 'Mode sans fin',
+  'intro.endlessKicker': 'Mode sans limite',
   'intro.endlessText':
     'Pas de dernière vague. Chaque vague apporte plus d’astéroïdes et plus de vitesse, et une nouvelle forme arrive toutes les 3 vagues. Jusqu’où iras-tu ?',
   'intro.record': 'Ton record : vague {wave}',
