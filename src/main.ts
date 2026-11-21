@@ -1,4 +1,5 @@
 import './style.css';
+import { Analytics } from './analytics';
 import { Sfx } from './audio';
 import { Game } from './game';
 import { detectLang, setLang } from './i18n';
@@ -14,6 +15,8 @@ setupPwa();
 
 const sfx = new Sfx();
 const game = new Game(document.getElementById('game') as HTMLCanvasElement, sfx);
-new UI(game, sfx, save);
+const stats = new Analytics(save, () => game.activeRun());
+game.onRunEnd = (r, outcome) => stats.runEnd(r, outcome);
+new UI(game, sfx, save, stats);
 
 if (import.meta.env.DEV) (window as unknown as { game: Game }).game = game;

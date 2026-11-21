@@ -17,6 +17,12 @@ export const en = {
   'title.installHint': 'Add it to your Home Screen to play full screen, even offline.',
   'title.help': 'Draw with your finger or mouse. Each shape you draw blasts every asteroid of that shape on screen.',
 
+  // Anonymous statistics note (title screen)
+  'privacy.on': 'Anonymous game stats',
+  'privacy.off': 'Game stats off',
+  'privacy.turnOff': 'Turn off',
+  'privacy.turnOn': 'Turn on',
+
   // iPhone / iPad install guide
   'install.title': 'Install on {device}',
   'install.foot': 'The game then opens full screen from its icon, even offline.',

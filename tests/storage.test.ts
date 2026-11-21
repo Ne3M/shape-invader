@@ -53,6 +53,14 @@ describe('save data', () => {
     expect(back.normal.endlessBestWave).toBe(20);
   });
 
+  it('turns statistics on by default, and remembers the player id and the opt-out', () => {
+    expect(loadSave().stats).toEqual({ enabled: true, playerId: '', firstSeen: '', visits: 0 });
+    const d = loadSave();
+    d.stats = { enabled: false, playerId: 'abc', firstSeen: '2026-11-21', visits: 3 };
+    writeSave(d);
+    expect(loadSave().stats).toEqual(d.stats);
+  });
+
   it('migrates the old single mute switch', () => {
     store.set('shape-defense-v1', JSON.stringify({ unlocked: 3, muted: true }));
     const d = loadSave();

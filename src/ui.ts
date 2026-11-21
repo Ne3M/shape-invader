@@ -1,3 +1,4 @@
+import type { Analytics } from './analytics';
 import type { Sfx } from './audio';
 import { BOMB_CHARGE_TIME, type Game, type HudState, type LevelResult } from './game';
 import { LANGUAGES, LANG_CODES, fmt, getLang, levelName, levelTwist, onLangChange, setLang, shapeName, t } from './i18n';
@@ -44,8 +45,16 @@ export class UI {
     private game: Game,
     private sfx: Sfx,
     private save: SaveData,
+    private analytics: Analytics,
   ) {
     $('.title-shapes').innerHTML = SHAPE_ORDER.map((s) => shapeSvg(s, 30)).join('');
+    this.updateStatsNote();
+    $('#btn-stats').addEventListener('click', () => {
+      this.sfx.unlock();
+      this.sfx.click();
+      this.analytics.setEnabled(!this.analytics.enabled);
+      this.updateStatsNote();
+    });
     this.sfx.setMuted(save.sfxMuted);
     this.sfx.setMusicMuted(save.musicMuted);
     this.updateMuteButtons();
@@ -140,10 +149,18 @@ export class UI {
   private refreshTexts(): void {
     this.markLang();
     this.updateMuteButtons();
+    this.updateStatsNote();
     $('.title-shapes').innerHTML = SHAPE_ORDER.map((s) => shapeSvg(s, 30)).join('');
     this.hudCache = { ...this.hudCache, wave: -1, bomb: -1, shapes: '', remaining: '' };
     if (this.current === 'levels') this.showLevels();
     else if (this.current === 'intro') this.showIntro(this.selected);
+  }
+
+  /** Discreet line on the title screen: anonymous statistics, with a switch to turn them off. */
+  private updateStatsNote(): void {
+    const on = this.analytics.enabled;
+    $('.stats-note-text').textContent = t(on ? 'privacy.on' : 'privacy.off');
+    $('#btn-stats').textContent = t(on ? 'privacy.turnOff' : 'privacy.turnOn');
   }
 
   private updateMuteButtons(): void {

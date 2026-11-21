@@ -25,6 +25,7 @@ npm run build    # static files in dist/
 | `src/music.ts` | Procedural music: ambient in menus, 120 BPM groove in game |
 | `src/storage.ts` | Progress saved in localStorage |
 | `src/pwa.ts` | Service worker registration, install button, iOS hint |
+| `src/analytics.ts` | Anonymous stats sent to Umami: one `session` event per visit (activity + every record), never from localhost; players can turn it off on the title screen |
 | `public/sw.js` | Service worker (offline cache) |
 | `public/manifest.webmanifest` | App manifest (full screen, icons) |
 | `scripts/make-icons.mjs` | Regenerates the PNG icons: `node scripts/make-icons.mjs` |

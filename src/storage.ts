@@ -20,6 +20,35 @@ export interface SaveData {
   lang: Lang | null;
   normal: Records;
   expertRecords: Records;
+  stats: StatsInfo;
+}
+
+/** Anonymous game statistics (see src/analytics.ts). */
+export interface StatsInfo {
+  /** The player can turn statistics off from the title screen. */
+  enabled: boolean;
+  /** Random anonymous id, created at the first game and renewed after 13 months. '' = none yet. */
+  playerId: string;
+  /** Date of the first game with this id (YYYY-MM-DD). */
+  firstSeen: string;
+  /** Visits with at least one game, with this id. */
+  visits: number;
+}
+
+function freshStats(): StatsInfo {
+  return { enabled: true, playerId: '', firstSeen: '', visits: 0 };
+}
+
+function readStats(s: Partial<StatsInfo> | undefined): StatsInfo {
+  const d = freshStats();
+  if (!s) return d;
+  d.enabled = s.enabled !== false;
+  if (typeof s.playerId === 'string' && typeof s.firstSeen === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(s.firstSeen)) {
+    d.playerId = s.playerId;
+    d.firstSeen = s.firstSeen;
+    d.visits = Math.max(0, Number(s.visits) | 0);
+  }
+  return d;
 }
 
 // Key kept from the game's former name so existing progress is not lost.
@@ -33,7 +62,7 @@ function freshRecords(): Records {
 }
 
 function fresh(): SaveData {
-  return { unlocked: START_UNLOCKED, sfxMuted: false, musicMuted: false, expert: false, lang: null, normal: freshRecords(), expertRecords: freshRecords() };
+  return { unlocked: START_UNLOCKED, sfxMuted: false, musicMuted: false, expert: false, lang: null, normal: freshRecords(), expertRecords: freshRecords(), stats: freshStats() };
 }
 
 function readRecords(r: Partial<Records> | undefined): Records {
@@ -61,6 +90,7 @@ export function loadSave(): SaveData {
       p.normal ?? { best: p.best, stars: p.stars, endlessBestWave: p.endlessBestWave, endlessBestScore: p.endlessBestScore },
     );
     d.expertRecords = readRecords(p.expertRecords);
+    d.stats = readStats(p.stats);
     return d;
   } catch {
     return fresh();

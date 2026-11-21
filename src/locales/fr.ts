@@ -13,6 +13,11 @@ export const fr: Messages = {
   'title.installHint': 'Ajoute le jeu à ton écran d’accueil pour jouer en plein écran, même hors ligne.',
   'title.help': 'Dessine avec ton doigt ou ta souris. Chaque forme dessinée détruit tous les astéroïdes de cette forme à l’écran.',
 
+  'privacy.on': 'Statistiques de jeu anonymes',
+  'privacy.off': 'Statistiques désactivées',
+  'privacy.turnOff': 'Désactiver',
+  'privacy.turnOn': 'Réactiver',
+
   'install.title': 'Installer sur {device}',
   'install.foot': 'Le jeu s’ouvre ensuite en plein écran depuis son icône, même hors ligne.',
   'install.gotIt': 'Compris',

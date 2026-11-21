@@ -157,7 +157,11 @@ export interface LevelResult {
   wave: number;
   /** Time played in seconds (pauses excluded, stops when the shield breaks). */
   duration: number;
+  bombs: number;
 }
+
+/** How a run ended: level cleared, shield destroyed, or left before the end. */
+export type RunOutcome = 'win' | 'loss' | 'quit';
 
 const COOLDOWN = 0.2;
 const SHIELD_MAX = 100;
@@ -183,6 +187,8 @@ export class Game {
   onLevelComplete?: (r: LevelResult) => void;
   onGameOver?: (r: LevelResult) => void;
   onBanner?: (text: string, sub?: string) => void;
+  /** Every run ends here once: after onLevelComplete / onGameOver, or when it is left midway. */
+  onRunEnd?: (r: LevelResult, outcome: RunOutcome) => void;
 
   private ctx: CanvasRenderingContext2D;
   private w = 0;
@@ -239,6 +245,7 @@ export class Game {
   private streak = 0;
   private multiplier = 1;
   private bestMultiplier = 1;
+  private bombs = 0;
   private cooldownUntil = 0;
   private queued: { shape: ShapeId; at: Pt } | null = null;
   private shake = 0;
@@ -282,7 +289,20 @@ export class Game {
     this.startRun();
   }
 
+  /** The run being played (or paused) right now, as it would be reported if it stopped here. */
+  activeRun(): { result: LevelResult; outcome: RunOutcome } | null {
+    if (this.state !== 'playing' && this.state !== 'paused') return null;
+    return { result: this.result(), outcome: this.dying ? 'loss' : 'quit' };
+  }
+
+  /** A run left before its end (restart, back to the menus) still gets reported. */
+  private endActiveRun(): void {
+    const run = this.activeRun();
+    if (run) this.onRunEnd?.(run.result, run.outcome);
+  }
+
   private startRun(): void {
+    this.endActiveRun();
     this.waveIndex = 0;
     this.asteroids = [];
     this.blasts = [];
@@ -297,6 +317,7 @@ export class Game {
     this.streak = 0;
     this.multiplier = 1;
     this.bestMultiplier = 1;
+    this.bombs = 0;
     this.queued = null;
     this.dying = false;
     this.endTimer = 0;
@@ -331,6 +352,7 @@ export class Game {
       this.bombCharge = 0;
       this.score += targets.length * BOMB_POINTS;
       this.kills += targets.length;
+      this.bombs++;
     }
     this.shockwaves.push({ t: 0, maxR: this.halfDiag * 1.1, targets });
     this.flash = 1;
@@ -371,6 +393,7 @@ export class Game {
   }
 
   toMenu(): void {
+    this.endActiveRun();
     this.state = 'menu';
     this.asteroids = [];
     this.blasts = [];
@@ -502,6 +525,7 @@ export class Game {
       stars,
       wave: this.waveIndex + 1,
       duration: this.dying ? this.deathTime : this.time,
+      bombs: this.bombs,
     };
   }
 
@@ -867,10 +891,14 @@ export class Game {
       if (this.endTimer <= 0) {
         if (this.dying) {
           this.state = 'over';
-          this.onGameOver?.(this.result());
+          const r = this.result();
+          this.onGameOver?.(r);
+          this.onRunEnd?.(r, 'loss');
         } else {
           this.state = 'complete';
-          this.onLevelComplete?.(this.result());
+          const r = this.result();
+          this.onLevelComplete?.(r);
+          this.onRunEnd?.(r, 'win');
         }
       }
     } else if (this.breakTimer > 0) {
