@@ -51,12 +51,19 @@ describe('expert routes', () => {
   });
 
   it('square moves in a staircase: either in or across, never both', () => {
-    const s = samples('square', 800);
+    const s = samples('square', 700); // a multiple of its 7 phases, so no sample interval straddles two
     for (let i = 1; i < s.length; i++) {
       const goingIn = s[i].q - s[i - 1].q > 1e-9;
       const goingAcross = Math.abs(s[i].dTheta - s[i - 1].dTheta) > 1e-9;
       expect(goingIn && goingAcross).toBe(false);
     }
+  });
+
+  it('square ends with a move in, never sliding sideways into the ship', () => {
+    const a = expertPath('square', 0.95, 1);
+    const b = expertPath('square', 1, 1);
+    expect(b.q).toBeGreaterThan(a.q);
+    expect(b.dTheta).toBe(a.dTheta);
   });
 
   it('infinity loops: its distance to the ship goes back out at times', () => {

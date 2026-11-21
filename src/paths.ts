@@ -24,6 +24,8 @@ function tri(x: number): number {
 }
 
 const TAU = Math.PI * 2;
+/** Square route: in, across, in, across, in, across, in. */
+const SQUARE_PHASES = 7;
 
 /** A corner of an angular route: reached at progress `p`, at radial progress `q` and swing `dTheta`. */
 export interface RouteCorner {
@@ -54,13 +56,9 @@ export function expertCorners(shape: ShapeId, side: number): RouteCorner[] | nul
       ps.push(1);
       return ps.map(at);
     }
-    case 'square': {
-      // in, then across, 4 times
-      const ps: number[] = [];
-      for (let k = 0; k < 4; k++) ps.push(k / 4, k / 4 + 1 / 8);
-      ps.push(1);
-      return ps.map(at);
-    }
+    case 'square':
+      // a corner at the end of every move in / move across
+      return Array.from({ length: SQUARE_PHASES + 1 }, (_, i) => at(i / SQUARE_PHASES));
     default:
       return null;
   }
@@ -74,14 +72,14 @@ export function expertPath(shape: ShapeId, p: number, side: number): PathPoint {
     case 'triangle': // three long straight legs with two sharp turns
       return { q: p, dTheta: side * 0.6 * tri(p), rhoScale: 1 };
     case 'square': {
-      // staircase with right angles: in, across, in, across...
-      const n = 4;
-      const k = Math.min(n - 1, Math.floor(p * n));
-      const f = p * n - k;
+      // Staircase with right angles: 4 moves in and 3 moves across, alternating, ending with a move in
+      // (so it never slides sideways into the ship).
+      const k = Math.min(SQUARE_PHASES - 1, Math.floor(p * SQUARE_PHASES));
+      const f = p * SQUARE_PHASES - k;
+      const stair = Math.floor(k / 2);
       const level = (i: number) => side * 0.42 * (i % 2);
-      if (f < 0.5) return { q: (k + f * 2) / n, dTheta: level(k), rhoScale: 1 };
-      const g = (f - 0.5) * 2;
-      return { q: (k + 1) / n, dTheta: level(k) + (level(k + 1) - level(k)) * g, rhoScale: 1 };
+      if (k % 2 === 0) return { q: (stair + f) / 4, dTheta: level(stair), rhoScale: 1 };
+      return { q: (stair + 1) / 4, dTheta: level(stair) + (level(stair + 1) - level(stair)) * f, rhoScale: 1 };
     }
     case 'infinity': // figure-8 loops while advancing (1:2 Lissajous)
       return { q: p, dTheta: side * 0.35 * Math.sin(TAU * 2 * p), rhoScale: 1 + 0.16 * Math.sin(TAU * 4 * p) };

@@ -726,21 +726,42 @@ export class Game {
       targeted: false,
       points: 0,
     });
-    // Expert mode: follow the shape's route, taking the same time to reach the ship as a straight run.
+    // Expert mode: follow the shape's route, staying on screen exactly as long as a straight run would.
     if (this.expert && this.state !== 'menu') {
+      const a = this.asteroids[this.asteroids.length - 1];
       const hit = this.shipR + r * 0.6;
       const side = Math.random() < 0.5 ? 1 : -1;
-      this.asteroids[this.asteroids.length - 1].path = {
-        theta0: angle,
-        rho0: dist,
-        hit,
-        p: 0,
-        dur: (dist - hit) / speed,
-        side,
-        corners: expertCorners(shape, side),
-        entered: false,
-      };
+      const path: AsteroidPath = { theta0: angle, rho0: dist, hit, p: 0, dur: 1, side, corners: expertCorners(shape, side), entered: false };
+      // Time a Normal-mode run spends on screen (it counts as visible once it overlaps the edge by 0.4 r).
+      const visibleTarget = (edgeDistance(angle, this.w, this.h) + r * 0.4 - hit) / speed;
+      const { enter, impact } = this.routeVisibleSpan(a, path);
+      path.dur = visibleTarget / Math.max(0.2, impact - enter);
+      a.path = path;
     }
+  }
+
+  /**
+   * Walks an Expert route ahead of time to find where (as progress 0–1) the asteroid comes on screen
+   * and where it reaches the ship. The route's duration is then set so the on-screen part lasts as
+   * long as in Normal mode, whatever the shape: a spiral that skims the edges, or a staircase.
+   */
+  private routeVisibleSpan(a: Asteroid, path: AsteroidPath): { enter: number; impact: number } {
+    const probe = { ...a };
+    let entered = false;
+    let enter = 0;
+    const steps = 240;
+    for (let i = 0; i <= steps; i++) {
+      const p = i / steps;
+      const pos = this.routePoint(probe, path, p, entered);
+      probe.x = pos.x;
+      probe.y = pos.y;
+      if (!entered && this.onScreen(probe)) {
+        entered = true;
+        enter = p;
+      }
+      if (entered && Math.hypot(pos.x - this.cx, pos.y - this.cy) < path.hit) return { enter, impact: p };
+    }
+    return { enter, impact: 1 };
   }
 
   /** Screen position on an Expert route at progress `p`. `keepOnScreen` stops it slipping out of reach. */
