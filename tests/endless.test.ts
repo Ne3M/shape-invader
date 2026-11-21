@@ -1,6 +1,32 @@
 import { describe, expect, it } from 'vitest';
-import { endlessNewShape, endlessShapes, makeEndlessWave } from '../src/levels';
-import { SHAPE_ORDER } from '../src/shapes';
+import { endlessNewShape, endlessShapes, makeEndlessWave, shuffledShapes } from '../src/levels';
+import { SHAPE_ORDER, type ShapeId } from '../src/shapes';
+
+describe('endless mode: random shape order', () => {
+  it('each run gets a shuffle of all 8 shapes', () => {
+    const order = shuffledShapes();
+    expect([...order].sort()).toEqual([...SHAPE_ORDER].sort());
+  });
+
+  it('runs differ: starting shapes vary from one game to the next', () => {
+    const starts = new Set(Array.from({ length: 200 }, () => endlessShapes(0, shuffledShapes()).join(',')));
+    expect(starts.size).toBeGreaterThan(50);
+    // every shape sometimes starts a run
+    const first = new Set(Array.from({ length: 400 }, () => shuffledShapes()[0]));
+    expect(first.size).toBe(SHAPE_ORDER.length);
+  });
+
+  it('follows the run order wave after wave', () => {
+    const order: ShapeId[] = ['zigzag', 'v', 'infinity', 'circle', 'wave', 'square', 'line', 'triangle'];
+    expect(endlessShapes(0, order)).toEqual(['zigzag', 'v', 'infinity']);
+    expect(endlessNewShape(3, order)).toBe('circle');
+    expect(endlessNewShape(15, order)).toBe('triangle');
+    for (let w = 0; w < 30; w++) {
+      const pool = endlessShapes(w, order);
+      expect(makeEndlessWave(w, Math.random, order).shapes.every((s) => pool.includes(s))).toBe(true);
+    }
+  });
+});
 
 describe('endless mode', () => {
   it('starts with 3 shapes and adds one every 3 waves until all 8 are in', () => {

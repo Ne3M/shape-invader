@@ -1,7 +1,8 @@
 import type { Sfx } from './audio';
 import { BOMB_CHARGE_TIME, type Game, type HudState, type LevelResult } from './game';
 import { LANGUAGES, LANG_CODES, fmt, getLang, levelName, levelTwist, onLangChange, setLang, shapeName, t } from './i18n';
-import { LEVELS, LEVEL_COUNT, WAVES_PER_LEVEL, endlessShapes } from './levels';
+import { LEVELS, LEVEL_COUNT, WAVES_PER_LEVEL, endlessShapes, shuffledShapes } from './levels';
+import type { ShapeId } from './shapes';
 import { SHAPE_ORDER, SHAPES, demoStroke, shapeSvg } from './shapes';
 import { writeSave, type Records, type SaveData } from './storage';
 
@@ -17,6 +18,8 @@ export class UI {
   private selected = 0;
   private hudCache = { shield: -1, score: -1, multiplier: -1, wave: -1, level: -1, shapes: '', expert: false, bomb: -1 };
   private bannerTimer = 0;
+  /** Endless: shape order drawn when its intro is shown, so the intro shows the run's first shapes. */
+  private endlessOrder: ShapeId[] = shuffledShapes();
 
   /** Records of the selected mode (Normal or Expert). */
   private get rec(): Records {
@@ -175,7 +178,7 @@ export class UI {
         this.showIntro(ENDLESS);
         break;
       case 'start':
-        this.startLevel(this.selected);
+        this.startLevel(this.selected, true);
         break;
       case 'resume':
         this.resume();
@@ -223,12 +226,13 @@ export class UI {
   private showIntro(index: number): void {
     this.selected = index;
     if (index === ENDLESS) {
+      this.endlessOrder = shuffledShapes();
       $('.intro-kicker').textContent = t('intro.endlessKicker') + this.modeTag;
       $('.intro-name').textContent = t('endless.name');
       $('.intro-new').innerHTML = '';
       $('.intro-twist').textContent = t('intro.endlessText');
       $('.intro-pool').innerHTML =
-        endlessShapes(0).map((sh) => shapeSvg(sh, 30)).join('') +
+        endlessShapes(0, this.endlessOrder).map((sh) => shapeSvg(sh, 30)).join('') +
         (this.rec.endlessBestWave ? `<div class="intro-record">${t('intro.record', { wave: this.rec.endlessBestWave })}</div>` : '');
       this.show('intro');
       return;
@@ -248,11 +252,12 @@ export class UI {
     this.show('intro');
   }
 
-  private startLevel(index: number): void {
+  /** `fromIntro`: an endless run started from its intro keeps the shape order shown there; a retry draws a new one. */
+  private startLevel(index: number, fromIntro = false): void {
     this.selected = index;
     this.hudCache = { shield: -1, score: -1, multiplier: -1, wave: -1, level: -1, shapes: '', expert: !this.save.expert, bomb: -1 };
     this.show(null);
-    if (index === ENDLESS) this.game.startEndless(this.save.expert);
+    if (index === ENDLESS) this.game.startEndless(this.save.expert, fromIntro ? this.endlessOrder : shuffledShapes());
     else this.game.startLevel(index, this.save.expert);
   }
 

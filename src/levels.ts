@@ -98,16 +98,29 @@ const ENDLESS_START_SHAPES = 3;
 /** A new shape type joins the endless pool every this many waves, until all are in. */
 const ENDLESS_SHAPE_EVERY = 3;
 
-/** Shape types in play at endless wave `w` (0-based): circle, triangle, square, then one more every 3 waves. */
-export function endlessShapes(w: number): ShapeId[] {
-  return SHAPE_ORDER.slice(0, Math.min(SHAPE_ORDER.length, ENDLESS_START_SHAPES + Math.floor(w / ENDLESS_SHAPE_EVERY)));
+/**
+ * The order in which shapes join an endless run, shuffled for every run so no two games play alike.
+ * (Fisher–Yates shuffle of all 8 shapes.)
+ */
+export function shuffledShapes(rand: () => number = Math.random): ShapeId[] {
+  const order = [...SHAPE_ORDER];
+  for (let i = order.length - 1; i > 0; i--) {
+    const j = Math.floor(rand() * (i + 1));
+    [order[i], order[j]] = [order[j], order[i]];
+  }
+  return order;
+}
+
+/** Shape types in play at endless wave `w` (0-based): the first 3 of the run's order, then one more every 3 waves. */
+export function endlessShapes(w: number, order: readonly ShapeId[] = SHAPE_ORDER): ShapeId[] {
+  return order.slice(0, Math.min(order.length, ENDLESS_START_SHAPES + Math.floor(w / ENDLESS_SHAPE_EVERY)));
 }
 
 /** The shape that joins the pool at endless wave `w`, if any. */
-export function endlessNewShape(w: number): ShapeId | undefined {
+export function endlessNewShape(w: number, order: readonly ShapeId[] = SHAPE_ORDER): ShapeId | undefined {
   if (w === 0 || w % ENDLESS_SHAPE_EVERY !== 0) return undefined;
-  const n = endlessShapes(w).length;
-  return n > endlessShapes(w - 1).length ? SHAPE_ORDER[n - 1] : undefined;
+  const n = endlessShapes(w, order).length;
+  return n > endlessShapes(w - 1, order).length ? order[n - 1] : undefined;
 }
 
 /**
@@ -115,15 +128,15 @@ export function endlessNewShape(w: number): ShapeId | undefined {
  * more asteroids per wave, faster, denser, with bigger bursts and more shape types at once.
  * Speed and spawn rate reach their limits around wave 27; asteroid count keeps rising to wave ~35.
  */
-export function makeEndlessWave(w: number, rand: () => number = Math.random): WaveDef {
+export function makeEndlessWave(w: number, rand: () => number = Math.random, order: readonly ShapeId[] = SHAPE_ORDER): WaveDef {
   const count = Math.min(48, Math.round((5 + 1.1 * w) * WAVE_LENGTH));
   const travelTime = Math.max(2.6, 8 - 0.2 * w);
   const spawnInterval = Math.max(0.28, 1.4 - 0.04 * w);
   const burstChance = Math.min(0.55, 0.02 * w);
   const burstMax = Math.min(5, 2 + Math.floor(w / 6));
 
-  const pool = endlessShapes(w);
-  const fresh = endlessNewShape(w);
+  const pool = endlessShapes(w, order);
+  const fresh = endlessNewShape(w, order);
   const distinct = Math.min(pool.length, 2 + Math.floor(w / 4));
   const chosen = new Set<ShapeId>();
   if (fresh) chosen.add(fresh);

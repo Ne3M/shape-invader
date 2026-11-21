@@ -9,6 +9,7 @@ import {
   makeEndlessWave,
   makeWave,
   pickWeighted,
+  shuffledShapes,
   type WaveDef,
 } from './levels';
 import { levelName, shapeName, t } from './i18n';
@@ -212,6 +213,8 @@ export class Game {
   private levelIndex = 0;
   /** Endless mode: waves never stop; the run ends when the shield is gone. */
   private endless = false;
+  /** Endless: the order in which shapes join this run (shuffled per run). */
+  private endlessOrder: ShapeId[] = [...SHAPE_ORDER];
   /** Expert mode: asteroids follow shape-specific routes instead of flying straight in. */
   private expert = false;
   private waveIndex = 0;
@@ -264,7 +267,8 @@ export class Game {
   }
 
   /** Endless mode: as many waves as the player can survive. */
-  startEndless(expert = false): void {
+  startEndless(expert = false, order: ShapeId[] = shuffledShapes()): void {
+    this.endlessOrder = order;
     this.expert = expert;
     this.endless = true;
     this.levelIndex = -1;
@@ -456,18 +460,18 @@ export class Game {
   /** Banner subtitle for a wave: progress in a level; in endless mode, any newly added shape. */
   private waveSubtitle(index: number): string {
     if (!this.endless) return t('banner.progress', { n: index + 1, total: WAVES_PER_LEVEL });
-    const fresh = endlessNewShape(index);
+    const fresh = endlessNewShape(index, this.endlessOrder);
     return fresh ? t('banner.newShape', { shape: shapeName(fresh) }) : t('endless.name');
   }
 
   private currentShapes(): ShapeId[] {
-    return this.endless ? endlessShapes(this.waveIndex) : LEVELS[this.levelIndex].shapes;
+    return this.endless ? endlessShapes(this.waveIndex, this.endlessOrder) : LEVELS[this.levelIndex].shapes;
   }
 
   /** Starts the current wave. The first wave gets a longer lead-in and its own banner;
    *  later waves were already announced when the previous one was cleared. */
   private beginWave(): void {
-    this.wave = this.endless ? makeEndlessWave(this.waveIndex) : makeWave(this.levelIndex, this.waveIndex);
+    this.wave = this.endless ? makeEndlessWave(this.waveIndex, Math.random, this.endlessOrder) : makeWave(this.levelIndex, this.waveIndex);
     this.toSpawn = this.wave.count;
     this.breakTimer = 0;
     if (this.waveIndex === 0) {
@@ -900,7 +904,7 @@ export class Game {
       wave: this.waveIndex + 1,
       level: this.levelIndex + 1,
       // Endless: show the next wave's shapes during the break, so a new one appears with its banner.
-      shapes: this.endless && this.breakTimer > 0 ? endlessShapes(this.waveIndex + 1) : this.currentShapes(),
+      shapes: this.endless && this.breakTimer > 0 ? endlessShapes(this.waveIndex + 1, this.endlessOrder) : this.currentShapes(),
       endless: this.endless,
       expert: this.expert,
       bomb: this.bombCharge,
